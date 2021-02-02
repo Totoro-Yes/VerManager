@@ -24,6 +24,7 @@ import asyncio
 import unittest
 import os
 import psutil
+import typing as T
 from datetime import datetime
 from manager.basic.commandExecutor import CommandExecutor
 
@@ -31,6 +32,10 @@ from manager.basic.commandExecutor import CommandExecutor
 async def stopCE(ce: CommandExecutor) -> None:
     await asyncio.sleep(2)
     await ce.stop()
+
+
+async def output_proc(data: bytes, *args) -> None:
+    args[0].append(data.decode())
 
 
 async def check_cmd_terminated(ce: CommandExecutor) -> None:
@@ -99,3 +104,15 @@ class CommandExecutorTestCases(unittest.IsolatedAsyncioTestCase):
             # is terminated
             check_cmd_terminated(self.sut)
         )
+
+    async def test_CE_OutputProcess(self) -> None:
+        """
+        Process command output in realtime.
+        """
+        content = []  # type: T.List[str]
+        self.sut.setCommand(["echo 123; echo 456"])
+        self.sut.set_output_proc(output_proc, content)
+
+        await self.sut.run()
+
+        self.assertEqual(["123\n456\n"], content)
