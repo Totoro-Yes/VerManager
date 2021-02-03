@@ -296,6 +296,10 @@ def job_result_url(unique_id: str, fileName: str) -> str:
     return DATA_URL + may_slash + unique_id + "/" + fileName
 
 
+def cmd_log_handler(dl: DataLink, letter: Letter, args: Any) -> None:
+    print(letter)
+
+
 async def binaryHandler(dl: DataLink, letter: BinaryLetter,
                         env: Entry.EntryEnv) -> None:
     chooserSet = EVENT_HANDLER_TOOLS.chooserSet
@@ -352,6 +356,8 @@ async def logRegisterhandler(env: Entry.EntryEnv, letter: Letter) -> None:
     logger = env.modules.getModule(LOGGER_M_NAME)
     logId = letter.getHeader('logId')
     logger.log_register(logId)
+
+
 
 
 ###############################################################################

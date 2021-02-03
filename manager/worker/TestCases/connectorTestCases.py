@@ -25,10 +25,44 @@ import asyncio
 import unittest
 import manager.worker.TestCases.misc.linker as misc
 import manager.worker.configs as cfg
+import typing as T
 
 from manager.basic.letter import Letter
 from manager.basic.info import Info
-from manager.worker.connector import Linker
+from manager.worker.connector import Linker, Connector
+
+
+class ServerProto(asyncio.DatagramProtocol):
+
+    def __init__(self, dataBox: T.List) -> None:
+        self.dataBox = dataBox
+
+    def datagram_received(self, data, addr) -> None:
+        self.dataBox.append(data)
+
+
+class ClientProto(asyncio.DatagramProtocol):
+
+    def datagram_received(self, data, addr) -> None:
+        return
+
+
+class ConnectorTestCases(unittest.IsolatedAsyncioTestCase):
+
+    async def asyncSetUp(self) -> None:
+        cfg.config = Info("manager/worker/TestCases/misc/jobprocunit_config.yaml")
+        self.connector = Connector()
+
+    async def test_Connector_CreateEndpoint(self) -> None:
+        dataBox = []  # type: T.List[str]
+
+        self.connector.create_endpoint(
+            "E1", ("127.0.0.1", 3501), proto=ServerProto(dataBox))
+
+        transport, _ = await asyncio.get_running_loop()\
+            .create_datagram_endpoint(lambda: ClientProto(), remote_addr=("127.0.0.1", 3501))
+
+        T.cast(asyncio.DatagramTransport, transport).sendto("123456")
 
 
 class LinkerTestCases(unittest.IsolatedAsyncioTestCase):

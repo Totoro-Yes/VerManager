@@ -48,7 +48,6 @@ def data_processor_udp(dl: DataLink, data: typing.Any, args: typing.Any) -> None
         dl.notify(notify)
 
 
-
 class ClientProtocol(asyncio.BaseProtocol):
 
     def connection_made(self, transport: asyncio.BaseTransport) -> None:

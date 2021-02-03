@@ -354,6 +354,15 @@ class Linker:
             return Link.REMOVED
 
 
+class DefautlDatagramProtocol(asyncio.DatagramProtocol):
+
+    def datagram_received(self, data, addr) -> None:
+        """
+        Do nothing
+        """
+        return
+
+
 class Connector(ChannelReceiver):
 
     def __init__(self) -> None:
@@ -361,6 +370,11 @@ class Connector(ChannelReceiver):
 
         self._linker = Linker()
         self._letter_Q = asyncio.Queue(128)  # type: asyncio.Queue[Letter]
+
+        # Collection of datagram endpoints
+        # maintain by Connector but not Linker
+        # cause Linker only maintain connection.
+        self._endpoints = {}  # type: typing.Dict[str, asyncio.DatagramTransport]
 
     async def listen(self, lisId: str, host: str, port: int) -> None:
         await self._linker.new_listen(lisId, host, port)
@@ -397,6 +411,33 @@ class Connector(ChannelReceiver):
         # Do nothing
         return None
 
+    async def create_endpoint(
+            self, endpoint_id: str,
+            remote_address: typing.Tuple[str, int],
+            proto: asyncio.DatagramProtocol = DefautlDatagramProtocol()) -> None:
+
+        if endpoint_id not in self._endpoints:
+            return None
+
+        trans, _ = await asyncio.get_running_loop()\
+                                .create_datagram_endpoint(
+                                    lambda: proto,
+                                    remote_addr=remote_address
+                                )
+
+    def sendDatagram_bytes(
+            self,
+            endpoint_id: str,
+            data: bytes,
+            preproc: typing.Callable[[bytes], Letter],
+            *procargs: typing.Any) -> None:
+
+        if endpoint_id not in self._endpoints:
+            raise ENDPOINT_NOT_EXISTS(endpoint_id)
+
+        endpoint = self._endpoints[endpoint_id]
+        endpoint.sendto(preproc(data, *procargs))
+
 
 class LINK_ID_NOT_FOUND(Exception):
 
@@ -417,3 +458,12 @@ class LINK_NOT_EXISTS(Exception):
 
     def __str__(self) -> str:
         return "Link " + self._linkid + " not exist"
+
+
+class ENDPOINT_NOT_EXISTS(Exception):
+
+    def __init__(self, endpoint_id) -> None:
+        self._id = endpoint_id
+
+    def __str__(self) -> str:
+        return "Endpoint " + self._id + " not exists"
