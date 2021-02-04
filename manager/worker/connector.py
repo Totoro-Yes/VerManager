@@ -416,7 +416,7 @@ class Connector(ChannelReceiver):
             remote_address: typing.Tuple[str, int],
             proto: asyncio.DatagramProtocol = DefautlDatagramProtocol()) -> None:
 
-        if endpoint_id not in self._endpoints:
+        if endpoint_id in self._endpoints:
             return None
 
         trans, _ = await asyncio.get_running_loop()\
@@ -424,19 +424,36 @@ class Connector(ChannelReceiver):
                                     lambda: proto,
                                     remote_addr=remote_address
                                 )
+        self._endpoints[endpoint_id] = typing.cast(asyncio.DatagramTransport, trans)
+
+    def shutdown_endpoint(self, endpoint_id: str) -> None:
+        if endpoint_id not in self._endpoints:
+            return None
+
+        self._endpoints[endpoint_id].close()
+        del self._endpoints[endpoint_id]
+
+    def get_endpoint(self, endpoint_id: str) -> typing.Optional[asyncio.DatagramTransport]:
+        if endpoint_id not in self._endpoints:
+            return None
+
+        return self._endpoints[endpoint_id]
+
+    def isEndpointExists(self, endpoint_id: str) -> bool:
+        return endpoint_id in self._endpoints
 
     def sendDatagram_bytes(
             self,
             endpoint_id: str,
             data: bytes,
             preproc: typing.Callable[[bytes], Letter],
-            *procargs: typing.Any) -> None:
+            *procargs) -> None:
 
         if endpoint_id not in self._endpoints:
             raise ENDPOINT_NOT_EXISTS(endpoint_id)
 
         endpoint = self._endpoints[endpoint_id]
-        endpoint.sendto(preproc(data, *procargs))
+        endpoint.sendto(preproc(data, *procargs).toBytesWithLength())
 
 
 class LINK_ID_NOT_FOUND(Exception):

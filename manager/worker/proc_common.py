@@ -43,6 +43,39 @@ class Output:
         self._outputQ = None  # type: typing.Optional[asyncio.Queue]
         self._state = self.STATE_READY
 
+        self._entities = {}  # type: typing.Dict[str, typing.Any]
+
+    def addEntity(self, eid: str, entity: typing.Any) -> None:
+        if eid in self._entities:
+            return None
+        self._entities[eid] = entity
+
+    def rmEntity(self, eid: str) -> None:
+        if eid not in self._entities:
+            return None
+        del self._entities[eid]
+
+    def call(self, eid: str, proc: str, *args) -> typing.Any:
+        f = self._get_entity_prop(eid, proc)
+        if f is None:
+            return None
+        else:
+            return f(*args)
+
+    async def async_call(self, eid: str, proc: str, *args) -> typing.Any:
+        f = self._get_entity_prop(eid, proc)
+        if f is None:
+            return None
+        else:
+            return await f(*args)
+
+    def _get_entity_prop(self, eid: str, proc: str) -> typing.Any:
+        if eid not in self._entities:
+            return None
+
+        entity = self._entities[eid]
+        return getattr(entity, proc)
+
     def state(self) -> int:
         return self._state
 
@@ -56,6 +89,7 @@ class Output:
         self._state = state
 
     def setConnector(self, conn: Connector) -> None:
+        self._entities['conn'] = conn
         self._connector = conn
 
     async def send(self, letter: Letter, timeout=None) -> None:
