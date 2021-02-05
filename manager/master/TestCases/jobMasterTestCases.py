@@ -35,6 +35,8 @@ from channels.db import database_sync_to_async
 from manager.master.jobMaster import command_var_replace, \
     command_preprocessing, build_preprocessing
 from manager.master.build import Build
+from manager.basic.mmanager import MManager
+from manager.master.TestCases.misc.stubs import StorageStub
 
 
 class DispatcherFake(Endpoint):
@@ -70,6 +72,11 @@ class JobMasterTestCases(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         # Setup
         config.config = Info("manager/master/TestCases/misc/config.yaml")
+        config.mmanager = MManager()
+
+        # Add StorageStub
+        config.mmanager.addModule(StorageStub())
+
         self.sut = JobMaster()
 
     async def test_JobMaster_Create(self) -> None:
@@ -87,7 +94,7 @@ class JobMasterTestCases(unittest.IsolatedAsyncioTestCase):
         job = Job("JobMasterTest1", "GL8900", {"sn": "123456", "vsn": "123456"})
 
         # Exercise
-        self.sut.bind(job)
+        await self.sut.bind(job)
 
         # Verify
         idents = [t.id().split("_")[1] for t in job.tasks()]

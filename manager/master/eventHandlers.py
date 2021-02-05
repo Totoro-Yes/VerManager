@@ -43,14 +43,11 @@ from manager.master.eventListener \
 
 from manager.basic.type import Error
 from manager.basic.letter import Letter, \
-    ResponseLetter, BinaryLetter, NotifyLetter
+    ResponseLetter, BinaryLetter, NotifyLetter, TaskLogLetter
 
 from manager.master.task import Task, SingleTask, PostTask
-from manager.master.dispatcher import Dispatcher
 
 from manager.basic.storage import StoChooser
-
-from manager.master.dispatcher import M_NAME as DISPATCHER_M_NAME
 from manager.master.logger import Logger, M_NAME as LOGGER_M_NAME
 
 from manager.master.workerRoom import WorkerRoom, M_NAME as WR_M_NAME
@@ -126,7 +123,9 @@ class EVENT_HANDLER_TOOLS:
         self.ACTION_TBL[state].append(action)
 
     @classmethod
-    async def packDataWithChangeLog(self, vsn: str, filePath: str, dest: str) -> str:
+    async def packDataWithChangeLog(
+            self, vsn: str, filePath: str, dest: str) -> str:
+
         pathSplit = filePath.split("/")
         pathSplit[-1] = pathSplit[-1] + ".log.rar"
         zipPath = "/".join(pathSplit)
@@ -266,8 +265,6 @@ async def responseHandler_ResultStore(
     logger = env.modules.getModule('Logger')
 
     taskId = task.id()
-    extra = task.getExtra()
-
     trans_fin = EVENT_HANDLER_TOOLS.transfer_finished
     path = trans_fin[taskId]
 
@@ -296,8 +293,11 @@ def job_result_url(unique_id: str, fileName: str) -> str:
     return DATA_URL + may_slash + unique_id + "/" + fileName
 
 
-def cmd_log_handler(dl: DataLink, letter: Letter, args: Any) -> None:
-    print(letter)
+def cmd_log_handler(dl: DataLink, letter: TaskLogLetter, args: Any) -> None:
+    """
+    args
+    """
+    message = letter.getMessage()
 
 
 async def binaryHandler(dl: DataLink, letter: BinaryLetter,
@@ -358,8 +358,6 @@ async def logRegisterhandler(env: Entry.EntryEnv, letter: Letter) -> None:
     logger.log_register(logId)
 
 
-
-
 ###############################################################################
 #                               Notify Handlers                               #
 ###############################################################################
@@ -385,7 +383,8 @@ class NotifyHandle:
             raise NOTIFY_NOT_MATCH_WITH_HANDLER(type)
 
     @classmethod
-    async def NOTIFY_H_WSC(self, env: Entry.EntryEnv, nl: NotifyLetter) -> None:
+    async def NOTIFY_H_WSC(self, env: Entry.EntryEnv,
+                           nl: NotifyLetter) -> None:
         """
         Change state of correspond worker.
         """

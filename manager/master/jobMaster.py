@@ -30,7 +30,8 @@ from manager.models import Jobs, JobInfos, Informations, \
 from typing import Dict, Any, Tuple, Optional, cast, List
 from manager.master.dispatcher import Dispatcher
 from manager.master.job import Job
-from manager.master.exceptions import Job_Command_Not_Found, Job_Bind_Failed
+from manager.master.exceptions import Job_Command_Not_Found, Job_Bind_Failed, \
+    UNABLE_TO_CREATE_META_FILE
 from manager.master.build import Build, BuildSet
 from manager.master.task import SingleTask, PostTask, Task
 from manager.basic.endpoint import Endpoint
@@ -38,6 +39,8 @@ from channels.layers import get_channel_layer
 from channels.db import database_sync_to_async
 from manager.master.job import VerResult
 from manager.basic.mmanager import Module
+from manager.basic.storage import Storage
+from manager.basic.observer import Subject
 
 from client.messages import JobInfoMessage, JobStateChangeMessage, \
     JobFinMessage, JobFailMessage, JobBatchMessage, JobHistoryMessage, \
@@ -190,13 +193,18 @@ class JobMasterMsgSrc(MsgSource):
         return JobAllResultsMessage(ver_results)
 
 
-class JobMaster(Endpoint, Module):
+class JobMaster(Endpoint, Module, Subject):
 
     M_NAME = "JobMaster"
+    NOTIFY_LOG = "JobMasterLog"
 
     def __init__(self) -> None:
         Endpoint.__init__(self)
         Module.__init__(self, self.M_NAME)
+
+        # Subject init
+        Subject.__init__(self, self.M_NAME)
+        self.addType(self.NOTIFY_LOG)
 
         self._jobs = {}  # type: Dict[str, Job]
         self._config = config.config
@@ -285,7 +293,7 @@ class JobMaster(Endpoint, Module):
         self._jobs[str(job.unique_id)] = job
 
         # Bind Job with a job command
-        self.bind(job)
+        await self.bind(job)
 
         # Assign job to another module typically
         # is Dispatcher.
@@ -372,7 +380,7 @@ class JobMaster(Endpoint, Module):
         # Maintain the Job's state
         await self._job_maintain(unique_id, state)
 
-    def bind(self, job: Job) -> None:
+    async def bind(self, job: Job) -> None:
         """
         Bind a job with a Job command that defined in
         configuration file, after binded a set of tasks
@@ -380,6 +388,7 @@ class JobMaster(Endpoint, Module):
         """
         # Configuration is needed
         assert(self._config is not None)
+        assert(config.mmanager is not None)
 
         job_command = self._config.getConfig(JobCommandPrefix + job.cmd_id)
 
@@ -394,6 +403,22 @@ class JobMaster(Endpoint, Module):
         else:
             # Job Command is a Build
             self._bind_build(job, job_command)
+
+        # Register persistent place for each task of job.
+        metaDB = cast(Storage, config.mmanager.getModule('meta'))  \
+            # type: Storage
+
+        for t in job.tasks():
+            fd = metaDB.create(job.jobid, t.id() + ".log")
+
+            if fd is None:
+                await self._log("Unable to create meta storage")
+                raise UNABLE_TO_CREATE_META_FILE(job.jobid, t.id())
+
+            fd.close()
+
+    async def _log(self, message: str) -> None:
+        await self.notify(self.NOTIFY_LOG, message)
 
     def _bind_buildset(self, job: Job, cmd: Dict) -> None:
         bs = BuildSet(cmd)

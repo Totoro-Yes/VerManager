@@ -155,6 +155,11 @@ class ServerInst(Thread):
         storage = Storage(info.getConfig('Storage'), self)
         self.addModule(storage)
 
+        metaInfos = Storage(info.getConfig('Meta'), self)
+        # Prevent module name conflict with Storage
+        metaInfos.setName('meta')
+        self.addModule(storage)
+
         revSyncner = RevSync()
         self.addModule(revSyncner)
 
