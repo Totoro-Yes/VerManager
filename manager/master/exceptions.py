@@ -119,3 +119,15 @@ class UNABLE_TO_CREATE_META_FILE(Exception):
     def __str__(self) -> str:
         return "Unable to create meta file for (" \
             + self.jobid + "," + self.taskid + ")"
+
+
+###############################################################################
+#                                 PersistentDB                                #
+###############################################################################
+class PERSISTENT_DB_FILE_NOT_EXISTS(Exception):
+
+    def __init__(self, filename: str) -> None:
+        self.filename = filename
+
+    def __str__(self) -> str:
+        return "File " + self.filename + " is not found in PersistentDB"
