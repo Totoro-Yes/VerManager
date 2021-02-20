@@ -29,6 +29,7 @@ from collections import namedtuple
 from manager.models import PersistentDBMeta
 from manager.basic.mmanager import Module
 from manager.master.exceptions import PERSISTENT_DB_FILE_NOT_EXISTS
+from channels.db import database_sync_to_async
 
 
 FileRefInfo = namedtuple('FileRefInfo', ['ref', 'lock'])
@@ -53,7 +54,7 @@ class PersistentDB(Module):
     async def cleanup(self) -> None:
         return
 
-    def create(self, key: str) -> None:
+    async def create(self, key: str) -> None:
 
         path = self._location + "/" + key
 
@@ -67,7 +68,7 @@ class PersistentDB(Module):
 
         # Record into database
         meta = PersistentDBMeta(key=key, path=path)
-        meta.save()
+        await database_sync_to_async(meta.save)()
 
     def open(self, key: str) -> None:
         if key not in self._files:
@@ -75,11 +76,24 @@ class PersistentDB(Module):
 
         path = self._files[key]
 
-        ref = open(path, "r")
+        ref = open(path, "r+b")
         lock = asyncio.Lock()
         self._refs[key] = FileRefInfo(ref, lock)
 
-    def remove(self, key: str) -> None:
+    async def close(self, key: str) -> None:
+
+
+
+        if key not in self._refs:
+            raise PERSISTENT_DB_FILE_NOT_EXISTS(key)
+
+        refinfo = self._refs[key]
+
+        async with refinfo.lock:
+            refinfo.ref.close()
+
+
+    async def remove(self, key: str) -> None:
         if key not in self._files:
             return
 
@@ -88,7 +102,7 @@ class PersistentDB(Module):
 
         # Remove meta info from db
         meta = PersistentDBMeta(pk=key)
-        meta.delete()
+        await database_sync_to_async(meta.delete)()
 
     async def _atomic_op(self, key: str, cb: T.Callable, *args) -> T.Any:
         refinfo = None  # type: T.Optional[FileRefInfo]
@@ -116,17 +130,28 @@ class PersistentDB(Module):
 
     @staticmethod
     async def read_cb(ref, length: int, pos: int) -> T.Union[str, bytes]:
-        ref.seek(pos)
+
+        if pos != -1:
+            ref.seek(pos)
+
         return ref.read(length)
 
     @staticmethod
     async def write_cb(ref, data: T.Union[str, bytes], pos: int) -> None:
-        ref.seek(pos)
+        if pos != -1:
+            ref.seek(pos)
+
         ref.write(data)
+
+        # Flush immediately after write
+        # cause another code may require these data
+        # after call of this write().
+        ref.flush()
+
         return None
 
-    async def read(self, key: str, length: int, pos: int) -> T.Union[str, bytes]:
+    async def read(self, key: str, length: int, pos: int = -1) -> T.Union[str, bytes]:
         return await self._atomic_op(key, self.read_cb, length, pos)
 
-    async def write(self, key: str, data: T.Union[str, bytes], pos: int) -> None:
+    async def write(self, key: str, data: T.Union[str, bytes], pos: int = -1) -> None:
         return await self._atomic_op(key, self.write_cb, data, pos)
