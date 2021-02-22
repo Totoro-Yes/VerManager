@@ -35,6 +35,10 @@ from channels.db import database_sync_to_async
 FileRefInfo = namedtuple('FileRefInfo', ['ref', 'lock'])
 
 
+CURRENT_POS = -1
+TAIL = -2
+
+
 class PersistentDB(Module):
 
     def __init__(self, location: str) -> None:
@@ -124,24 +128,25 @@ class PersistentDB(Module):
                 refinfo = self._refs[key]
 
         # Lock down the critical region,
+        # read maybe within async context
         # cause if the length is too big
-        # will may allow read within async context
         # to prevent eventloop dead.
         async with refinfo.lock:
             return await cb(refinfo.ref, *args)
 
     @staticmethod
-    async def read_cb(ref, length: int, pos: int) -> T.Union[str, bytes]:
-
-        if pos != -1:
+    def _seek_proc(ref, pos: int) -> None:
+        if pos != CURRENT_POS:
             ref.seek(pos)
+        elif pos == TAIL:
+            ref.seek(0, 2)
 
+    async def read_cb(self, ref, length: int, pos: int) -> T.Union[str, bytes]:
+        self._seek_proc(ref, pos)
         return ref.read(length)
 
-    @staticmethod
-    async def write_cb(ref, data: T.Union[str, bytes], pos: int) -> None:
-        if pos != -1:
-            ref.seek(pos)
+    async def write_cb(self, ref, data: T.Union[str, bytes], pos: int) -> None:
+        self._seek_proc(ref, pos)
 
         ref.write(data)
 
@@ -152,8 +157,10 @@ class PersistentDB(Module):
 
         return None
 
-    async def read(self, key: str, length: int, pos: int = -1) -> T.Union[str, bytes]:
+    async def read(self, key: str, length: int,
+                   pos: int = CURRENT_POS) -> T.Union[str, bytes]:
         return await self._atomic_op(key, self.read_cb, length, pos)
 
-    async def write(self, key: str, data: T.Union[str, bytes], pos: int = -1) -> None:
+    async def write(self, key: str, data: T.Union[str, bytes],
+                    pos: int = CURRENT_POS) -> None:
         return await self._atomic_op(key, self.write_cb, data, pos)
