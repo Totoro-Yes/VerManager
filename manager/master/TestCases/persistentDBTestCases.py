@@ -102,3 +102,13 @@ class PersistentDBTestCases(unittest.IsolatedAsyncioTestCase):
         with open("./PersistentDB/TEST", "r") as fd:
             data = fd.read(3)
             self.assertTrue(data == "123" or data == "abc")
+
+    async def test_PDB_Close(self) -> None:
+        await self.sut.create("TEST")
+        self.assertFalse(self.sut.is_open("TEST"))
+
+        await self.sut.write("TEST", b"123")
+        self.assertTrue(self.sut.is_open("TEST"))
+
+        await self.sut.close("TEST")
+        self.assertFalse(self.sut.is_open("TEST"))

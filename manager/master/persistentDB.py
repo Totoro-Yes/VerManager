@@ -80,18 +80,20 @@ class PersistentDB(Module):
         lock = asyncio.Lock()
         self._refs[key] = FileRefInfo(ref, lock)
 
+    def is_open(self, key: str) -> bool:
+        return key in self._refs
+
     async def close(self, key: str) -> None:
+        async with self._ref_lock:
+            if key not in self._refs:
+                raise PERSISTENT_DB_FILE_NOT_EXISTS(key)
 
+            refinfo = self._refs[key]
 
+            async with refinfo.lock:
+                refinfo.ref.close()
 
-        if key not in self._refs:
-            raise PERSISTENT_DB_FILE_NOT_EXISTS(key)
-
-        refinfo = self._refs[key]
-
-        async with refinfo.lock:
-            refinfo.ref.close()
-
+            del self._refs[key]
 
     async def remove(self, key: str) -> None:
         if key not in self._files:
