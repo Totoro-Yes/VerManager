@@ -185,7 +185,6 @@ class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
 
         self.sut.setChannel(ChannelEntry("JobProcUnit"))
 
-    @unittest.skip("Use sendfile instead of sendLetter")
     async def test_JobProcUnit_JobProc(self) -> None:
         # Setup
         self.sut.start()
@@ -198,13 +197,16 @@ class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Verify
         while True:
-            letter = await asyncio.wait_for(self.connector.q.get(), timeout=3)
+            letter = await asyncio.wait_for(self.connector.q.get(), timeout=5)
 
             if not isinstance(letter, BinaryLetter):
                 continue
 
             self.assertEqual(b'job\n', letter.getContent('bytes'))
             break
+
+        # Teardow
+        os.remove("Builds/job_result")
 
     async def test_JobProcUnit_Exists(self) -> None:
         # Setup
@@ -237,6 +239,22 @@ class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Exercise
         job = NewLetter("Job", "123456", "v1", "",
+                        {'cmds': ["sleep 100", "echo job > job_result"],
+                         'resultPath': "./job_result"})
+
+        await self.sut._normal_space.put(job)
+        await asyncio.sleep(3)
+
+        await self.sut.cancel("Job")
+
+        self.assertFalse(self.sut.exists("Job"))
+
+    async def test_JobProcUnit_CancelInQueue(self) -> None:
+        # Setup
+        self.sut.start()
+
+        # Exercise
+        job = NewLetter("Job", "123456", "v1", "",
                         {'cmds': ["sleep 10", "echo job > job_result"],
                          'resultPath': "./job_result"})
         job1 = NewLetter("Job1", "123456", "v1", "",
@@ -249,7 +267,7 @@ class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
         await self.sut._normal_space.put(job)
         await self.sut._normal_space.put(job1)
         await self.sut._normal_space.put(job2)
-        await asyncio.sleep(1)
+        await asyncio.sleep(3)
 
         # Cancel
         await self.sut.cancel("Job1")

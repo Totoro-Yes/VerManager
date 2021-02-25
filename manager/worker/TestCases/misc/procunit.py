@@ -23,7 +23,7 @@
 import asyncio
 import typing
 
-from manager.basic.letter import CommandLetter, Letter, NewLetter
+from manager.basic.letter import CommandLetter, Letter, NewLetter, BinaryLetter
 from manager.worker.procUnit import ProcUnit, JobProcUnit
 
 
@@ -75,11 +75,21 @@ class Connector:
     async def sendLetter(self, letter: Letter, timeout=None) -> None:
         await self.q.put(letter)
 
+    async def sendFile(self, linkid: str, tid: str, path: str,
+                       version: str, fileName: str) -> bool:
+
+        with open("Builds/"+fileName, "rb") as fd:
+            for line in fd:
+                letter = BinaryLetter(tid, line, "menu", fileName)
+                await self.q.put(letter)
+
+        return True
+
 
 class ProcUnitStub_Dirty(ProcUnit):
 
-    def __init__(self, ident: str, type: str) -> None:
-        ProcUnit.__init__(self, ident, type)
+    def __init__(self, ident: str, type_: str) -> None:
+        ProcUnit.__init__(self, ident, type_)
         self.counter = 0
 
     async def cleanup(self) -> bool:
