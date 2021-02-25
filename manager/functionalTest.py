@@ -20,44 +20,138 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import os
+import time
 import unittest
 import asyncio
-from typing import cast
+from datetime import datetime
+from typing import cast, Optional, Callable
 from manager.master.job import Job
 from manager.master.jobMaster import JobMaster
 from manager.master.master import ServerInst
 from manager.worker.worker import Worker
+from multiprocessing import Process
+import manager.master.configs as cfg
 
 
-async def WorkerStart(config: str) -> None:
-    pass
+async def masterCreate(host: str,
+                       port: int, config: str) -> ServerInst:
+    # Create Master
+    master = ServerInst(host, port, config)
+    master.start()
+
+    cfg.skip_doc_gen = True
+
+    # Wait Master startup
+    await asyncio.sleep(1)
+
+    return master
+
+
+def WorkerStartup(startup: Optional[Callable],
+                  config: str) -> None:
+    if startup is not None:
+        startup()
+    Worker(config).start()
+
+
+async def WorkerCreate(config: str,
+                       startup: Optional[Callable] = None) -> Process:
+    # Worker Spawn
+    p = Process(
+        target=WorkerStartup,
+        args=(startup, config)
+    )
+    p.start()
+
+    # Wait Worker startup
+    await asyncio.sleep(1)
+
+    return p
 
 
 class FunctionalTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
-        self.master = ServerInst("127.0.0.1", 30001, "./WorkSpace/config.yaml")
-        self.worker = Worker("./manager/worker/config.yaml")
-        self.worker1 = Worker("./manager/worker/config1.yaml")
-        self.worker2 = Worker("./manager/worker/config2.yaml")
+        # Create Master
+        self.master = await masterCreate(
+            "127.0.0.1", 30001, "./WorkSpace/config.yaml")
 
-    @unittest.skip("")
-    async def test_Functional_Startup(self) -> None:
-        # Exercise
-        self.master.start()
-
-        # Verify
-        await asyncio.sleep(10)
+        # Create Workers
+        self.worker = await WorkerCreate("./manager/worker/config.yaml")
+        self.worker1 = await WorkerCreate("./manager/worker/config1.yaml")
+        self.worker2 = await WorkerCreate("./manager/worker/config2.yaml")
 
     async def test_Functional_DoJob(self) -> None:
+        # Exercise
+        job = Job("Job", "GL8900", {"sn": "123456", "vsn": "Job"})
+        job_master = cast(JobMaster, self.master.getModule("JobMaster"))
+        if job_master is None:
+            self.fail("Fail to get JobMaster")
+
+        await job_master.do_job(job)
+
+        before = datetime.utcnow()
+
+        while True:
+            if os.path.exists("data/"+str(job.unique_id)):
+                break
+            if (datetime.utcnow() - before).seconds > 60:
+                self.fail("Timeout")
+            else:
+                await asyncio.sleep(1)
+
+
+###############################################################################
+#                             WorkerLost TestCases                            #
+###############################################################################
+async def disconnectFromMaster() -> None:
+    """
+    Disconnect from Master after 10 seconds
+    """
+    import manager.worker.configs as cfg
+
+    connector = cfg.connector
+    print("Try Disconnect")
+    print(connector)
+    assert(connector is not None)
+
+    await asyncio.sleep(10)
+    print("Disconnect")
+    connector.close("Master")
+
+    await asyncio.sleep(5)
+    # After 5 seconds we are able to reconnect to
+
+def startup_lost() -> None:
+    import manager.worker.configs as cfg
+    cfg.debug = True
+    cfg.debugRoutine = disconnectFromMaster
+
+
+class WorkerLostTestCases(unittest.IsolatedAsyncioTestCase):
+
+    async def asyncSetUp(self) -> None:
+        # Create Master
+        self.master = await masterCreate(
+            "127.0.0.1", 30001, "./WorkSpace/config.yaml",
+        )
+        # Create Merger
+        self.merger = await WorkerCreate("./manager/worker/config.yaml")
+
+    async def test_WorkerLostAndReconnect(self) -> None:
         # Setup
-        self.master.start()
-        await asyncio.sleep(3)
-        self.worker.start_nowait()
-        await asyncio.sleep(1)
+        # Create an Worker that will disconnect then reconnect
+        # after master remove it.
+        await WorkerCreate(
+            "./manager/worker/config1.yaml",
+            startup_lost
+        )
 
         # Exercise
-        job = Job("Job", "GL8900", {"sn": "123456", "vsn": "123456"})
+        job = Job("Job", "GL8900", {"sn": "123456", "vsn": "Job"})
         job_master = cast(JobMaster, self.master.getModule("JobMaster"))
+        if job_master is None:
+            self.fail("Fail to get JobMaster")
 
         await job_master.do_job(job)

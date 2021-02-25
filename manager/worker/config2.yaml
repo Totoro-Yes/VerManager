@@ -1,0 +1,36 @@
+MASTER_ADDRESS:
+  host: "127.0.0.1"
+  port: 30001
+  dataPort: 8899
+
+MERGER_ADDRESS:
+  host: "127.0.0.1"
+  port: 8025
+  dataPort: 8030
+
+WORKER_NAME: WORKER_EXAMPLE_2
+
+REPO_URL: git@10.5.4.211:root/ci_config.git
+
+STORAGE: DoneStorage
+
+PROJECT_NAME:  ci_config
+
+QUEUE_SIZE: 1024
+
+MAX_TASK_CAN_PROC: 1
+
+PROCESS_POOL_SIZE: 1
+
+RESULT_PATH: ./BSP/config/image/link/pack.rar
+
+PostStorage: ./PostStorage
+
+BUILDING_CMDS:
+  - sleep 60
+
+ROLE: NORMAL
+
+FRAG_DIR: ./Frags
+POST_DIR: ./Post
+BUILD_DIR: ./Build2

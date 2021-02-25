@@ -71,6 +71,9 @@ class Link:
     def hb_timer_diff(self) -> int:
         return (datetime.utcnow() - self.last).seconds
 
+    def disconnect(self) -> None:
+        self.writer.close()
+
 
 class Linker:
 
@@ -152,6 +155,7 @@ class Linker:
 
         while True:
             if link.state == Link.REMOVED:
+                self._links[linkid].disconnect()
                 del self._links[linkid]
                 break
 

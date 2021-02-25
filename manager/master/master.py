@@ -155,8 +155,8 @@ class ServerInst(Thread):
         storage = Storage(info.getConfig('Storage'), self)
         self.addModule(storage)
 
-        revSyncner = RevSync()
-        self.addModule(revSyncner)
+        #revSyncner = RevSync()
+        #self.addModule(revSyncner)
 
         # Subscribe to subjects
         eventListener.subscribe(EventListener.NOTIFY_LOST, workerRoom)

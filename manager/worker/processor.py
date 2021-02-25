@@ -103,6 +103,7 @@ class Processor(ModuleDaemon):
 
         while True:
             letter = await self._reqQ.get()
+            print(letter)
 
             # Deal with CommandLetter
             if isinstance(letter, CommandLetter):

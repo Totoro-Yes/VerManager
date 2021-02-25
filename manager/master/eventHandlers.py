@@ -266,7 +266,6 @@ async def responseHandler_ResultStore(
     logger = env.modules.getModule('Logger')
 
     taskId = task.id()
-    extra = task.getExtra()
 
     trans_fin = EVENT_HANDLER_TOOLS.transfer_finished
     path = trans_fin[taskId]
@@ -276,8 +275,9 @@ async def responseHandler_ResultStore(
     resultDir = cfg.config.getConfig("ResultDir")
 
     try:
-        fileName = await EVENT_HANDLER_TOOLS.packDataWithChangeLog(
-            task.getVSN(), path, resultDir)
+        if not cfg.skip_doc_gen:
+            fileName = await EVENT_HANDLER_TOOLS.packDataWithChangeLog(
+                task.getVSN(), path, resultDir)
 
     except FileNotFoundError as e:
         traceback.print_exc()

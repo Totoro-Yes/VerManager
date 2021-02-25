@@ -1,0 +1,34 @@
+MASTER_ADDRESS:
+  host: "127.0.0.1"
+  port: 30000
+
+MERGER_ADDRESS:
+  host: "127.0.0.1"
+  port: 8025
+
+WORKER_NAME: WORKER_EXAMPLE_3
+
+REPO_URL: git@10.5.4.211:gpon/olt.git
+
+STORAGE: DoneStorage
+
+PROJECT_NAME:  olt
+
+QUEUE_SIZE: 1024
+
+MAX_TASK_CAN_PROC: 1
+
+PROCESS_POOL_SIZE: 1
+
+RESULT_PATH: ./BSP/config/image/link/pack.rar
+
+PostStorage: ./PostStorage
+
+BUILDING_CMDS:
+  - sleep 60
+
+ROLE: NORMAL
+
+FRAG_DIR: ./Frags
+POST_DIR: ./Post
+BUILD_DIR: ./Build3
