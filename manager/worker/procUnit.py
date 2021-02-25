@@ -354,6 +354,7 @@ class JobProcUnit(JobProcUnitProto):
         if self._cmd_executor.isRunning():
             await self._cmd_executor.stop()
             self._isInWork = False
+            self._inProcTid = ""
 
             if self._channel is not None:
                 await self._channel.update_and_notify('isProcessing', 'false')
