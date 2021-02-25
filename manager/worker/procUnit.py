@@ -349,6 +349,7 @@ class JobProcUnit(JobProcUnitProto):
         # Clear request space
         self._normal_space._queue.clear()
         await self.stopCurrentJob()
+        await self.cleanup()
 
     async def stopCurrentJob(self) -> None:
         if self._cmd_executor.isRunning():
