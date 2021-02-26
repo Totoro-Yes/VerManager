@@ -21,7 +21,7 @@
 # SOFTWARE.
 
 import os
-import time
+import shutil
 import unittest
 import asyncio
 from datetime import datetime
@@ -75,12 +75,16 @@ class FunctionalTestCases(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         # Create Master
         self.master = await masterCreate(
-            "127.0.0.1", 30001, "./WorkSpace/config.yaml")
+            "127.0.0.1", 30001, "./manager/misc/master_test_configs/config.yaml")
 
         # Create Workers
-        self.worker = await WorkerCreate("./manager/worker/config.yaml")
-        self.worker1 = await WorkerCreate("./manager/worker/config1.yaml")
-        self.worker2 = await WorkerCreate("./manager/worker/config2.yaml")
+        self.worker = await WorkerCreate("./manager/misc/worker_test_configs/config.yaml")
+        self.worker1 = await WorkerCreate("./manager/misc/worker_test_configs/config1.yaml")
+        self.worker2 = await WorkerCreate("./manager/misc/worker_test_configs/config2.yaml")
+
+    async def asyncTearDown(self) -> None:
+        for d in ["Build", "Build1", "Build2", "Post", "data", "log"]:
+            shutil.rmtree(d)
 
     async def test_Functional_DoJob(self) -> None:
         # Exercise
@@ -134,17 +138,17 @@ class WorkerLostTestCases(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         # Create Master
         self.master = await masterCreate(
-            "127.0.0.1", 30001, "./WorkSpace/config.yaml",
+            "127.0.0.1", 30001, "./manager/misc/master_test_configs/config.yaml",
         )
         # Create Merger
-        self.merger = await WorkerCreate("./manager/worker/config.yaml")
+        self.merger = await WorkerCreate("./manager/misc/worker_test_configs/config.yaml")
 
     async def test_WorkerLostAndReconnect(self) -> None:
         # Setup
         # Create an Worker that will disconnect then reconnect
         # after master remove it.
         await WorkerCreate(
-            "./manager/worker/config1.yaml",
+            "./manager/misc/worker_test_configs/config1.yaml",
             startup_lost
         )
 
