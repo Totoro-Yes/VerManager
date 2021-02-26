@@ -1,0 +1,68 @@
+Address: "127.0.0.1"
+Port: 30001
+dataPort: 8899
+
+LogDir: ./log
+ResultDir: ./data
+Storage: ./data
+PostStorage: ./PostStorage
+
+GitlabUrl: http://10.5.4.211:8011
+Project_ID: 34
+
+PrivateToken: 4mU2joxotSkzTqLPhvgu
+
+TimeZone: +8:00
+
+WaitingInterval: 2
+
+JOB_COMMAND_GL8900:
+  Builds:
+    GL5610:
+        cmd:
+        - echo 1 > file1
+        output:
+        - ./file1
+
+    GL5610-v2:
+        cmd:
+        - echo 2 > file2
+        output:
+        - ./file2
+
+    GL5610-v3:
+        cmd:
+        - echo 3 > file3
+        output:
+        - ./file3
+
+    GL8900:
+        cmd:
+        - echo 4 > file4
+        output:
+        - ./file4
+
+  Merge:
+    cmd:
+      - cat file1 file2 file3 file4 > <version>.txt
+    output:
+      - ./<version>.txt
+
+BuildSet_TWO:
+  Builds:
+    GL5610:
+        cmd:
+        - echo ll <version> <datetime> > ll
+        output:
+        - ./ll
+
+    GL5610-v2:
+        cmd:
+        - echo ll2 <version> <datetime> > ll2
+        output:
+        - ./ll2
+  Merge:
+    cmd:
+      - cat * > <version>total
+    output:
+      - ./<version>total
