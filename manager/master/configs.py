@@ -23,8 +23,12 @@
 from typing import Optional, Any
 from manager.basic.info import Info
 from manager.basic.mmanager import MManager
-from manager.master.logger import Logger
 
 config = None  # type: Optional[Info]
 mmanager = None  # type: Optional[MManager]
 logger = None  # type: Any
+
+###############################################################################
+#                             Configs for testings                            #
+###############################################################################
+skip_doc_gen = False

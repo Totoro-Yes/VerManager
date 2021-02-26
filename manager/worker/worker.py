@@ -25,7 +25,7 @@ import socket
 import manager.worker.configs as configs
 
 from typing import Callable
-from manager.basic.letter import Letter, BinaryLetter
+from manager.basic.letter import Letter
 from manager.basic.info import Info
 from manager.worker.connector import Connector
 from manager.worker.processor import Processor
@@ -33,7 +33,7 @@ from manager.worker.procUnit import JobProcUnit, PostProcUnit
 from manager.basic.dataLink import DataLinker, DataLink
 from manager.worker.datalink import binaryStore, binaryStoreNotify
 from manager.worker.monitor import Monitor
-
+from manager.basic.debuger import Debuger
 
 
 class Worker:
@@ -50,6 +50,7 @@ class Worker:
     async def run(self) -> None:
         # Create Connector and Create Link
         connector = Connector()
+        configs.connector = connector
 
         # Create Monitor
         monitor = Monitor(self.cfg.getConfig('WORKER_NAME'))
@@ -115,6 +116,11 @@ class Worker:
 
         # Start Processor
         processor.start()
+
+        # Debug
+        if configs.debug:
+            debuger = Debuger(configs.debugRoutine)
+            debuger.start()
 
         # Block Forever
         while True:
