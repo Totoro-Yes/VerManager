@@ -43,3 +43,15 @@ class LINK_NOT_EXISTS(Exception):
 
     def __str__(self) -> str:
         return "Link " + str(self.linkid) + " is not exists"
+
+
+###############################################################################
+#                             ProcUnit Exceptions                             #
+###############################################################################
+class RESULT_FILE_NOT_FOUND(Exception):
+
+    def __init__(self, path) -> None:
+        self.path = path
+
+    def __str__(self) -> str:
+        return "Result file not found: " + self.path
