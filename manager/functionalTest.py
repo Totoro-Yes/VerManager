@@ -95,8 +95,7 @@ class FunctionalTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncTearDown(self) -> None:
         for d in ["Build", "Build1", "Build2", "Post", "data", "log"]:
-            #shutil.rmtree(d)
-            pass
+            shutil.rmtree(d)
 
     async def test_Functional_DoJob(self) -> None:
         # Exercise
