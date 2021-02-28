@@ -46,6 +46,8 @@ from manager.basic.info import Info
 # Need by PostProcUnit
 from manager.basic.letter import PostTaskLetter
 
+from manager.worker.exceptions import RESULT_FILE_NOT_FOUND
+
 
 UNIT_TYPE_JOB_PROC = 0
 UNIT_TYPE_POST_PROC = 1
@@ -231,6 +233,9 @@ async def job_result_transfer(target: str, job: NewLetter,
     projName = cast(Info, configs.config).getConfig("PROJECT_NAME")
     result_path = build_dir + "/" + projName + '/' + extra['resultPath']
     fileName = result_path.split("/")[-1]
+
+    if not os.path.exists(result_path):
+        raise RESULT_FILE_NOT_FOUND(result_path)
 
     await output.sendfile(target, result_path, tid, version, fileName)
 
