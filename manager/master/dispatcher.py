@@ -474,7 +474,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer, Endpoint):
                 # redispatch. Just notify to JobMaster,
                 # then it will cancel all tasks of the corresponding
                 # job.
-                self.peer_notify((
+                await self.peer_notify((
                     t.id(),
                     Task.STATE_STR_MAPPING[Task.STATE_FAILURE]
                 ))
