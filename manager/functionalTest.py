@@ -34,6 +34,17 @@ from multiprocessing import Process
 import manager.master.configs as cfg
 
 
+async def wait_until_file_exists(path: str, timeout: int) -> None:
+    before = datetime.utcnow()
+    while True:
+        if os.path.exists(path):
+            break
+        if (datetime.utcnow() - before).seconds > timeout:
+            self.fail("Timeout")
+        else:
+            await asyncio.sleep(1)
+
+
 async def masterCreate(host: str,
                        port: int, config: str) -> ServerInst:
     # Create Master
@@ -84,7 +95,8 @@ class FunctionalTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncTearDown(self) -> None:
         for d in ["Build", "Build1", "Build2", "Post", "data", "log"]:
-            shutil.rmtree(d)
+            #shutil.rmtree(d)
+            pass
 
     async def test_Functional_DoJob(self) -> None:
         # Exercise
@@ -95,15 +107,8 @@ class FunctionalTestCases(unittest.IsolatedAsyncioTestCase):
 
         await job_master.do_job(job)
 
-        before = datetime.utcnow()
-
-        while True:
-            if os.path.exists("data/"+str(job.unique_id)):
-                break
-            if (datetime.utcnow() - before).seconds > 60:
-                self.fail("Timeout")
-            else:
-                await asyncio.sleep(1)
+        # Verify
+        await wait_until_file_exists("data/" + str(job.unique_id), 60)
 
 
 ###############################################################################
@@ -116,16 +121,16 @@ async def disconnectFromMaster() -> None:
     import manager.worker.configs as cfg
 
     connector = cfg.connector
-    print("Try Disconnect")
-    print(connector)
     assert(connector is not None)
 
     await asyncio.sleep(10)
-    print("Disconnect")
     connector.close("Master")
 
-    await asyncio.sleep(5)
+    await asyncio.sleep(20)
+
     # After 5 seconds we are able to reconnect to
+    await connector.open_connection('Master', '127.0.0.1', 30001)
+
 
 def startup_lost() -> None:
     import manager.worker.configs as cfg
@@ -143,11 +148,14 @@ class WorkerLostTestCases(unittest.IsolatedAsyncioTestCase):
         # Create Merger
         self.merger = await WorkerCreate("./manager/misc/worker_test_configs/config.yaml")
 
+    async def asyncTearDown(self) -> None:
+        self.merger.terminate()
+
     async def test_WorkerLostAndReconnect(self) -> None:
         # Setup
         # Create an Worker that will disconnect then reconnect
         # after master remove it.
-        await WorkerCreate(
+        worker = await WorkerCreate(
             "./manager/misc/worker_test_configs/config1.yaml",
             startup_lost
         )
@@ -159,3 +167,35 @@ class WorkerLostTestCases(unittest.IsolatedAsyncioTestCase):
             self.fail("Fail to get JobMaster")
 
         await job_master.do_job(job)
+
+        # Verify
+        await wait_until_file_exists("data/" + str(job.unique_id), 60)
+
+        worker.terminate()
+
+
+class MergerLostTestCases(unittest.IsolatedAsyncioTestCase):
+
+    async def asyncSetUp(self) -> None:
+        # Create Master
+        self.master = await masterCreate(
+            "127.0.0.1", 30001, "./manager/misc/master_test_configs/config.yaml",
+        )
+
+    async def test_MergerLost(self) -> None:
+        # Create Merger and Worker
+        merger = await WorkerCreate(
+            "./manager/misc/worker_test_configs/config.yaml",
+            startup_lost
+        )
+        worker = await WorkerCreate("./manager/misc/worker_test_configs/config1.yaml")
+
+        # Exercise
+        job = Job("Job", "GL8900", {"sn": "123456", "vsn": "Job"})
+        job_master = cast(JobMaster, self.master.getModule("JobMaster"))
+        if job_master is None:
+            self.fail("Fail to get JobMaster")
+        await job_master.do_job(job)
+
+        # Verify
+        await asyncio.sleep(3600)
