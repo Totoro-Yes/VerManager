@@ -25,6 +25,7 @@ import platform
 import abc
 import asyncio
 import manager.worker.configs as configs
+import traceback
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -468,8 +469,6 @@ class JobProcUnit(JobProcUnitProto):
         try:
             await self._job_result_transfer(linkid, job)
         except Exception:
-
-            import traceback
             traceback.print_exc()
 
             await self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)

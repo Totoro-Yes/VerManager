@@ -40,7 +40,7 @@ async def wait_until_file_exists(path: str, timeout: int) -> None:
         if os.path.exists(path):
             break
         if (datetime.utcnow() - before).seconds > timeout:
-            self.fail("Timeout")
+            raise Exception("Timeout")
         else:
             await asyncio.sleep(1)
 
@@ -183,11 +183,11 @@ class MergerLostTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def test_MergerLost(self) -> None:
         # Create Merger and Worker
-        merger = await WorkerCreate(
+        await WorkerCreate(
             "./manager/misc/worker_test_configs/config.yaml",
             startup_lost
         )
-        worker = await WorkerCreate("./manager/misc/worker_test_configs/config1.yaml")
+        await WorkerCreate("./manager/misc/worker_test_configs/config1.yaml")
 
         # Exercise
         job = Job("Job", "GL8900", {"sn": "123456", "vsn": "Job"})
