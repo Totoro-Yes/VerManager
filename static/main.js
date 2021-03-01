@@ -1133,10 +1133,7 @@ class VerGenComponent {
         this.revisions = [];
     }
     ngOnInit() {
-        this.verService.getVersions()
-            .subscribe(versions => this.versions = versions);
-        this.revService.getRevisions()
-            .subscribe(revisions => this.revisions = revisions);
+        this.refresh();
     }
     generate(version, ...infos) {
         let buildInfo = {};
@@ -1147,6 +1144,12 @@ class VerGenComponent {
             const build = { ver: version, info: buildInfo };
             this.verService.generate(build).subscribe();
         }
+    }
+    refresh() {
+        this.verService.getVersions()
+            .subscribe(versions => this.versions = versions);
+        this.revService.getRevisions()
+            .subscribe(revisions => this.revisions = revisions);
     }
 }
 VerGenComponent.ɵfac = function VerGenComponent_Factory(t) { return new (t || VerGenComponent)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_version_service__WEBPACK_IMPORTED_MODULE_1__["VersionService"]), _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_revision_service__WEBPACK_IMPORTED_MODULE_2__["RevisionService"])); };
@@ -1644,6 +1647,7 @@ __webpack_require__.r(__webpack_exports__);
 
 
 const routes = [
+    { path: '', redirectTo: "/dash", pathMatch: 'full' },
     { path: 'dash', component: _dash_dash_component__WEBPACK_IMPORTED_MODULE_2__["DashComponent"] },
 ];
 class AppRoutingModule {
