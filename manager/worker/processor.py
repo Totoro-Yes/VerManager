@@ -32,15 +32,21 @@ from manager.worker.proc_common import Output,\
     PROCESSOR_UNIT_ALREADY_EXISTS
 from manager.worker.connector import Connector
 from manager.worker.channel import Channel, ChannelReceiver
+from manager.basic.observer import Subject
 
 
-class Processor(ModuleDaemon):
+class Processor(ModuleDaemon, Subject):
 
     NAME = "Processor"
+    PROC_LOG = "PROCESSOR_LOG"
     CMDHandler = typing.Callable[[CommandLetter], typing.Coroutine]
 
     def __init__(self) -> None:
         ModuleDaemon.__init__(self, self.NAME)
+
+        # Subject Init
+        Subject.__init__(self, self.NAME)
+        self.addType(self.PROC_LOG)
 
         self._unit_container = {}  # type: typing.Dict[str, ProcUnit]
         self._maintainer = UnitMaintainer(self._unit_container)
@@ -103,6 +109,9 @@ class Processor(ModuleDaemon):
 
         while True:
             letter = await self._reqQ.get()
+
+            # Log
+            await self.notify(self.PROC_LOG, (self.NAME, str(letter)))
 
             # Deal with CommandLetter
             if isinstance(letter, CommandLetter):

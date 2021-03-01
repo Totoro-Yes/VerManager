@@ -34,6 +34,7 @@ from manager.basic.dataLink import DataLinker, DataLink
 from manager.worker.datalink import binaryStore, binaryStoreNotify
 from manager.worker.monitor import Monitor
 from manager.basic.debuger import Debuger
+from manager.basic.logger import Logger
 
 
 class Worker:
@@ -48,6 +49,13 @@ class Worker:
         asyncio.get_running_loop().create_task(self.run())
 
     async def run(self) -> None:
+        # Create Logger
+        logger = Logger(self.cfg.getConfig('LOG_DIR'))
+        logger.start()
+        logger.handler_install(Processor.NAME, logger.listenTo)
+
+        configs.logger = logger
+
         # Create Connector and Create Link
         connector = Connector()
         configs.connector = connector
@@ -59,6 +67,7 @@ class Worker:
 
         # Create Processor
         processor = Processor()
+        processor.subscribe(Processor.PROC_LOG, configs.logger)
         monitor.track(processor.getMaintainer())
 
         processor.setup_output(connector)

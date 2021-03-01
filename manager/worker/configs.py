@@ -23,8 +23,10 @@
 from typing import Optional, Callable
 from manager.basic.info import Info
 from manager.worker.connector import Connector
+from manager.basic.logger import Logger
 
 config = None  # type: Optional[Info]
+logger = None  # type: Optional[Logger]
 
 
 ###############################################################################
