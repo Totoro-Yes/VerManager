@@ -50,7 +50,7 @@ class Worker:
 
     async def run(self) -> None:
         # Create Logger
-        logger = Logger(self.cfg.getConfig('LOG_DIR'))
+        logger = Logger("./log")
         logger.start()
         logger.handler_install(Processor.NAME, logger.listenTo)
 
