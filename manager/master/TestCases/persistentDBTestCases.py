@@ -25,7 +25,7 @@ import asyncio
 import unittest
 import os
 import shutil
-
+from channels.db import database_sync_to_async
 from manager.master.persistentDB import PersistentDB
 from manager.models import PersistentDBMeta
 
@@ -51,7 +51,7 @@ class PersistentDBTestCases(unittest.IsolatedAsyncioTestCase):
         """
         filePath = "./PersistentDB/TEST"
 
-        await self.sut.create("TEST")
+        await database_sync_to_async(self.sut.create)("TEST")
         self.assertTrue(PersistentDBMeta(key="TEST"))
         self.assertTrue(os.path.exists(filePath))
         await self.sut.remove("TEST")
@@ -59,13 +59,13 @@ class PersistentDBTestCases(unittest.IsolatedAsyncioTestCase):
     async def test_PDB_Remove(self) -> None:
         filePath = "./PersistentDB/TEST"
 
-        await self.sut.create("TEST")
+        await database_sync_to_async(self.sut.create)("TEST")
         await self.sut.remove("TEST")
 
         self.assertFalse(os.path.exists(filePath))
 
     async def test_PDB_Write(self) -> None:
-        await self.sut.create("TEST")
+        await database_sync_to_async(self.sut.create)("TEST")
         await self.sut.write("TEST", b"0123456", 0)
         await self.sut.write("TEST", b"a", 3)
 
@@ -76,7 +76,7 @@ class PersistentDBTestCases(unittest.IsolatedAsyncioTestCase):
         await self.sut.remove("TEST")
 
     async def test_PDB_Read(self) -> None:
-        await self.sut.create("TEST")
+        await database_sync_to_async(self.sut.create)("TEST")
 
         with open("./PersistentDB/TEST", "wb") as fd:
             fd.write(b"0123456")
@@ -90,7 +90,7 @@ class PersistentDBTestCases(unittest.IsolatedAsyncioTestCase):
         await self.sut.remove("TEST")
 
     async def test_PDB_AtomicalCheck(self) -> None:
-        await self.sut.create("TEST")
+        await database_sync_to_async(self.sut.create)("TEST")
 
         # Run two repeat write concurrently.
         await asyncio.gather(
@@ -104,7 +104,7 @@ class PersistentDBTestCases(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(data == "123" or data == "abc")
 
     async def test_PDB_Close(self) -> None:
-        await self.sut.create("TEST")
+        await database_sync_to_async(self.sut.create)("TEST")
         self.assertFalse(self.sut.is_open("TEST"))
 
         await self.sut.write("TEST", b"123")

@@ -38,7 +38,8 @@ from manager.master.dispatcher import Dispatcher, M_NAME as DISPATCHER_M_NAME, \
 from manager.master.eventListener \
     import EventListener, M_NAME as EVENT_M_NAME, Entry
 from manager.master.eventHandlers import responseHandler, binaryHandler, \
-    logHandler, logRegisterhandler, binaryNotify, NotifyHandle, cmd_log_handler
+    logHandler, logRegisterhandler, binaryNotify, NotifyHandle, cmd_log_handler, \
+    cmd_log_notify
 from manager.master.logger import Logger
 from manager.basic.storage import Storage
 from manager.master.taskTracker import TaskTracker
@@ -47,6 +48,7 @@ from manager.basic.dataLink import DataLinker, DataLink
 from manager.master.jobMaster import JobMaster
 from manager.master.proxy import Proxy
 from manager.models import model_init
+from manager.master.persistentDB import PersistentDB
 
 
 ServerInstance = None  # type:  Optional['ServerInst']
@@ -155,13 +157,11 @@ class ServerInst(Thread):
         storage = Storage(info.getConfig('Storage'), self)
         self.addModule(storage)
 
-        metaInfos = Storage(info.getConfig('Meta'), self)
-        # Prevent module name conflict with Storage
-        metaInfos.setName('meta')
-        self.addModule(storage)
+        metaInfos = PersistentDB(info.getConfig('Meta'))
+        self.addModule(metaInfos)
 
-        revSyncner = RevSync()
-        self.addModule(revSyncner)
+        #revSyncner = RevSync()
+        #self.addModule(revSyncner)
 
         # Subscribe to subjects
         eventListener.subscribe(EventListener.NOTIFY_LOST, workerRoom)
@@ -210,6 +210,7 @@ class ServerInst(Thread):
         dataLinker.addDataLink(
             self._address, dataPort, DataLink.UDP_DATALINK,
             cmd_log_handler, None)
+        dataLinker.addNotify("CMD_LOG", cmd_log_notify, None)
 
         # Proxy Init
         proxy = Proxy(1024)

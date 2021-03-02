@@ -41,6 +41,7 @@ from manager.master.job import VerResult
 from manager.basic.mmanager import Module
 from manager.basic.storage import Storage
 from manager.basic.observer import Subject
+from manager.master.persistentDB import PersistentDB
 
 from client.messages import JobInfoMessage, JobStateChangeMessage, \
     JobFinMessage, JobFailMessage, JobBatchMessage, JobHistoryMessage, \
@@ -398,24 +399,19 @@ class JobMaster(Endpoint, Module, Subject):
 
         # To check that is job command a build or buildset.
         if 'Builds' in job_command:
-            # Job Command is a BuildSet
+            # Job Command is a BuildSet(tid)
             self._bind_buildset(job, job_command)
         else:
             # Job Command is a Build
             self._bind_build(job, job_command)
 
         # Register persistent place for each task of job.
-        metaDB = cast(Storage, config.mmanager.getModule('meta'))  \
-            # type: Storage
+        metaDB = cast(PersistentDB, config.mmanager.getModule('Meta'))
 
         for t in job.tasks():
-            fd = metaDB.create(job.jobid, t.id() + ".log")
-
-            if fd is None:
-                await self._log("Unable to create meta storage")
-                raise UNABLE_TO_CREATE_META_FILE(job.jobid, t.id())
-
-            fd.close()
+            # Create MetaInfo file for task
+            await database_sync_to_async(metaDB.create)(t.id())
+            metaDB.open(t.id())
 
     async def _log(self, message: str) -> None:
         await self.notify(self.NOTIFY_LOG, message)

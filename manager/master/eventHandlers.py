@@ -56,6 +56,7 @@ from manager.basic.storage import M_NAME as STORAGE_M_NAME
 from manager.basic.util import pathSeperator
 from manager.basic.notify import Notify, WSCNotify
 from manager.basic.dataLink import DataLink, DataLinkNotify
+from manager.master.persistentDB import PersistentDB, TAIL
 
 ActionInfo = namedtuple('ActionInfo', 'isMatch execute args')
 path = str
@@ -297,7 +298,25 @@ def cmd_log_handler(dl: DataLink, letter: TaskLogLetter, args: Any) -> None:
     """
     args
     """
-    message = letter.getMessage()
+    tid = letter.getIdent()
+    msg = letter.getMessage()
+    dl.notify(DataLinkNotify("CMD_LOG", (tid, msg)))
+
+
+def cmd_log_notify(msg: Tuple[str, str], arg: Any) -> None:
+    assert(cfg.mmanager is not None)
+
+    tid = msg[0]
+    content = msg[1]
+
+    metaDB = cast(PersistentDB, cfg.mmanager.getModule(PersistentDB.M_NAME))
+
+    if not metaDB.is_exists(tid) or \
+       not metaDB.is_open(tid):
+        return
+
+    # Write to Tail of log file.
+    metaDB.write_sync(tid, content.encode(), TAIL)
 
 
 async def binaryHandler(dl: DataLink, letter: BinaryLetter,

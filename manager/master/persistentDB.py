@@ -41,7 +41,12 @@ TAIL = -2
 
 class PersistentDB(Module):
 
+    M_NAME = "Meta"
+
     def __init__(self, location: str) -> None:
+
+        Module.__init__(self, self.M_NAME)
+
         self._location = location
         if not os.path.exists(self._location):
             os.mkdir(self._location)
@@ -52,13 +57,15 @@ class PersistentDB(Module):
         # Lock to protect _refs
         self._ref_lock = asyncio.Lock()
 
+        self._loop = asyncio.get_running_loop()
+
     async def begin(self) -> None:
         return
 
     async def cleanup(self) -> None:
         return
 
-    async def create(self, key: str) -> None:
+    def create(self, key: str) -> None:
 
         path = self._location + "/" + key
 
@@ -72,11 +79,17 @@ class PersistentDB(Module):
 
         # Record into database
         meta = PersistentDBMeta(key=key, path=path)
-        await database_sync_to_async(meta.save)()
+        meta.save()
+
+    def is_exists(self, key: str) -> bool:
+        return key in self._files
 
     def open(self, key: str) -> None:
         if key not in self._files:
             raise PERSISTENT_DB_FILE_NOT_EXISTS(key)
+
+        if self.is_open(key):
+            return
 
         path = self._files[key]
 
@@ -136,10 +149,10 @@ class PersistentDB(Module):
 
     @staticmethod
     def _seek_proc(ref, pos: int) -> None:
-        if pos != CURRENT_POS:
-            ref.seek(pos)
-        elif pos == TAIL:
+        if pos == TAIL:
             ref.seek(0, 2)
+        elif pos != CURRENT_POS:
+            ref.seek(pos)
 
     async def read_cb(self, ref, length: int, pos: int) -> T.Union[str, bytes]:
         self._seek_proc(ref, pos)
@@ -164,3 +177,7 @@ class PersistentDB(Module):
     async def write(self, key: str, data: T.Union[str, bytes],
                     pos: int = CURRENT_POS) -> None:
         return await self._atomic_op(key, self.write_cb, data, pos)
+
+    def write_sync(self, key: str, data: T.Union[str, bytes],
+                   pos: int = CURRENT_POS) -> None:
+        self._loop.create_task(self.write(key, data, pos))

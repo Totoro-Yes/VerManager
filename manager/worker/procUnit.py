@@ -439,9 +439,10 @@ class JobProcUnit(JobProcUnitProto):
         # Create Endpoint that will be used to transfer command output
         # to master
         address = self._config.getConfig('MASTER_ADDRESS')
+
         await self._output_space.async_call(
             "conn", "create_endpoint", "LogEnd", (address['host'], address['dataPort']))
-        endpoint = self._output_space.call("conn", "get_endpoint", "conn")
+        endpoint = self._output_space.call("conn", "get_endpoint", "LogEnd")
 
         # Setup CommandExecutor
         self._cmd_executor.setCommand(commands)

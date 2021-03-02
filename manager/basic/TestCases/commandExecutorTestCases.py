@@ -79,7 +79,7 @@ class CommandExecutorTestCases(unittest.IsolatedAsyncioTestCase):
         """
         CommandExecutor run a command that stucked out of limit
         """
-        self.sut.setCommand(["sleep 10"])
+        self.sut.setCommand(["sleep 60"])
         self.sut.setStuckedLimit(1)
 
         before = datetime.now()
