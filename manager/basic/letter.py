@@ -911,9 +911,9 @@ class TaskLogLetter(Letter):
     Contain message of output of running task.
     """
 
-    def __init__(self, ident: str, message: str) -> None:
+    def __init__(self, tid: str, message: str) -> None:
         Letter.__init__(self, Letter.TaskLog,
-                        {"ident": ident},
+                        {"ident": tid},
                         {"message": message})
 
     def getIdent(self) -> str:
