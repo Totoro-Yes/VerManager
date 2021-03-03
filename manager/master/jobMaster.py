@@ -30,8 +30,7 @@ from manager.models import Jobs, JobInfos, Informations, \
 from typing import Dict, Any, Tuple, Optional, cast, List
 from manager.master.dispatcher import Dispatcher
 from manager.master.job import Job
-from manager.master.exceptions import Job_Command_Not_Found, Job_Bind_Failed, \
-    UNABLE_TO_CREATE_META_FILE
+from manager.master.exceptions import Job_Command_Not_Found, Job_Bind_Failed
 from manager.master.build import Build, BuildSet
 from manager.master.task import SingleTask, PostTask, Task
 from manager.basic.endpoint import Endpoint
@@ -39,16 +38,16 @@ from channels.layers import get_channel_layer
 from channels.db import database_sync_to_async
 from manager.master.job import VerResult
 from manager.basic.mmanager import Module
-from manager.basic.storage import Storage
 from manager.basic.observer import Subject
 from manager.master.persistentDB import PersistentDB
 
 from client.messages import JobInfoMessage, JobStateChangeMessage, \
     JobFinMessage, JobFailMessage, JobBatchMessage, JobHistoryMessage, \
-    JobAllResultsMessage, JobNewResultMessage
+    JobAllResultsMessage, JobNewResultMessage, TaskOutputMessage
 
 from manager.master.msgCell import MsgSource
 from client.messages import Message
+
 
 JobCommandPrefix = "JOB_COMMAND_"
 
@@ -148,7 +147,7 @@ class JobMasterMsgSrc(MsgSource):
 
         return JobBatchMessage(msgs)
 
-    async def query_history(self, *args) -> Optional[Message]:
+    async def query_history(self, args: List[str]) -> Optional[Message]:
         jobs = []  # type: List[Job]
 
         jobs_history = await database_sync_to_async(
@@ -181,7 +180,7 @@ class JobMasterMsgSrc(MsgSource):
 
         return JobHistoryMessage(jobs)
 
-    async def query_files(self, *args) -> Optional[Message]:
+    async def query_files(self, args: List[str]) -> Optional[Message]:
 
         # Retrieve from database
         ver_results = await JobHistory.jobHistory_transformation(
@@ -192,6 +191,35 @@ class JobMasterMsgSrc(MsgSource):
 
         # Generate message
         return JobAllResultsMessage(ver_results)
+
+    async def query_task(self, args: List[str]) -> Optional[Message]:
+        """
+        args: [query_type, uid, tid, pos, length]
+        """
+
+        uid, tid, pos, length = args[1], args[2], int(args[3]), int(args[4])
+
+        assert(config.mmanager is not None)
+
+        # To check that whether the task's output message is able
+        # to read.
+        metaDB = cast(
+            PersistentDB, config.mmanager.getModule(PersistentDB.M_NAME))
+
+        assert(metaDB is not None)
+
+        if not metaDB.is_exists(tid):
+            return None
+        if not metaDB.is_open(tid):
+            metaDB.open(tid)
+
+        # Read output message
+        output_message = await metaDB.read(tid, length, pos)
+
+        # Return message
+        return TaskOutputMessage(
+            uid, tid, pos, length, output_message
+        )
 
 
 class JobMaster(Endpoint, Module, Subject):
@@ -354,7 +382,7 @@ class JobMaster(Endpoint, Module, Subject):
         for job in jobs:
             await self._do_job(job)
 
-    async def handle(self, msg: Any) -> None:
+    async def handle(self, msg: Any) -> Any:
         """
         Peer should notify to JobMaster that
         which job's state is change.
@@ -380,6 +408,8 @@ class JobMaster(Endpoint, Module, Subject):
 
         # Maintain the Job's state
         await self._job_maintain(unique_id, state)
+
+        return
 
     async def bind(self, job: Job) -> None:
         """
