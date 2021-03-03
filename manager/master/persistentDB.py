@@ -93,7 +93,7 @@ class PersistentDB(Module):
 
         path = self._files[key]
 
-        ref = open(path, "r+b")
+        ref = open(path, "r+")
         lock = asyncio.Lock()
         self._refs[key] = FileRefInfo(ref, lock)
 
@@ -154,11 +154,11 @@ class PersistentDB(Module):
         elif pos != CURRENT_POS:
             ref.seek(pos)
 
-    async def read_cb(self, ref, length: int, pos: int) -> T.Union[str, bytes]:
+    async def read_cb(self, ref, length: int, pos: int) -> str:
         self._seek_proc(ref, pos)
         return ref.read(length)
 
-    async def write_cb(self, ref, data: T.Union[str, bytes], pos: int) -> None:
+    async def write_cb(self, ref, data: str, pos: int) -> None:
         self._seek_proc(ref, pos)
 
         ref.write(data)
@@ -171,13 +171,16 @@ class PersistentDB(Module):
         return None
 
     async def read(self, key: str, length: int,
-                   pos: int = CURRENT_POS) -> T.Union[str, bytes]:
+                   pos: int = CURRENT_POS) -> str:
         return await self._atomic_op(key, self.read_cb, length, pos)
 
-    async def write(self, key: str, data: T.Union[str, bytes],
+    async def readAll(self, key: str) -> str:
+        pass
+
+    async def write(self, key: str, data: str,
                     pos: int = CURRENT_POS) -> None:
         return await self._atomic_op(key, self.write_cb, data, pos)
 
-    def write_sync(self, key: str, data: T.Union[str, bytes],
+    def write_sync(self, key: str, data: str,
                    pos: int = CURRENT_POS) -> None:
         self._loop.create_task(self.write(key, data, pos))

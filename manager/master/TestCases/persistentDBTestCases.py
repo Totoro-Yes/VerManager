@@ -66,26 +66,26 @@ class PersistentDBTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def test_PDB_Write(self) -> None:
         await database_sync_to_async(self.sut.create)("TEST")
-        await self.sut.write("TEST", b"0123456", 0)
-        await self.sut.write("TEST", b"a", 3)
+        await self.sut.write("TEST", "0123456", 0)
+        await self.sut.write("TEST", "a", 3)
 
-        with open("./PersistentDB/TEST", "rb") as fd:
+        with open("./PersistentDB/TEST", "r") as fd:
             data = fd.read(8)
 
-        self.assertEqual(b"012a456", data)
+        self.assertEqual("012a456", data)
         await self.sut.remove("TEST")
 
     async def test_PDB_Read(self) -> None:
         await database_sync_to_async(self.sut.create)("TEST")
 
-        with open("./PersistentDB/TEST", "wb") as fd:
-            fd.write(b"0123456")
+        with open("./PersistentDB/TEST", "w") as fd:
+            fd.write("0123456")
 
         data = await self.sut.read("TEST", 7, 0)
         dataPos_3 = await self.sut.read("TEST", 3, 4)
 
-        self.assertEqual(data, b"0123456")
-        self.assertEqual(dataPos_3, b"456")
+        self.assertEqual(data, "0123456")
+        self.assertEqual(dataPos_3, "456")
 
         await self.sut.remove("TEST")
 
@@ -94,8 +94,8 @@ class PersistentDBTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Run two repeat write concurrently.
         await asyncio.gather(
-            WriteRepeatly(self.sut, "TEST", b"123", 100),
-            WriteRepeatly(self.sut, "TEST", b"abc", 100)
+            WriteRepeatly(self.sut, "TEST", "123", 100),
+            WriteRepeatly(self.sut, "TEST", "abc", 100)
         )
 
         # Make sure no data is overwrite by another.
@@ -107,7 +107,7 @@ class PersistentDBTestCases(unittest.IsolatedAsyncioTestCase):
         await database_sync_to_async(self.sut.create)("TEST")
         self.assertFalse(self.sut.is_open("TEST"))
 
-        await self.sut.write("TEST", b"123")
+        await self.sut.write("TEST", "123")
         self.assertTrue(self.sut.is_open("TEST"))
 
         await self.sut.close("TEST")
