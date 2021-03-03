@@ -158,6 +158,9 @@ class PersistentDB(Module):
         self._seek_proc(ref, pos)
         return ref.read(length)
 
+    async def read_all_cb(self, ref) -> None:
+        pass
+
     async def write_cb(self, ref, data: str, pos: int) -> None:
         self._seek_proc(ref, pos)
 
@@ -174,8 +177,8 @@ class PersistentDB(Module):
                    pos: int = CURRENT_POS) -> str:
         return await self._atomic_op(key, self.read_cb, length, pos)
 
-    async def readAll(self, key: str) -> str:
-        pass
+    async def readToTail(self, key: str, pos: int) -> str:
+        return await self._atomic_op(key, self.read_all_cb, pos)
 
     async def write(self, key: str, data: str,
                     pos: int = CURRENT_POS) -> None:
