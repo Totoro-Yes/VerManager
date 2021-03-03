@@ -33,12 +33,12 @@ class Endpoint(abc.ABC):
         self._peer = endpoint
         endpoint._peer = self
 
-    async def peer_notify(self, data: typing.Any) -> None:
+    async def peer_notify(self, data: typing.Any) -> typing.Any:
         assert(self._peer is not None)
-        await self._peer.handle(data)
+        return await self._peer.handle(data)
 
     @abc.abstractmethod
-    async def handle(self, data: typing.Any) -> None:
+    async def handle(self, data: typing.Any) -> typing.Any:
         """
         Respond to peer's notification.
         """
