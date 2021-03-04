@@ -158,4 +158,4 @@ class LinkerTestCases(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(10)
 
         # Verify
-        self.assertEqual(Link.CONNECTED, self.sut.linkState("INTERUPT"))
+        self.assertEqual(Link.REMOVED, self.sut.linkState("INTERUPT"))
