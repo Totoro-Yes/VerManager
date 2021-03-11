@@ -194,17 +194,19 @@ class JobMasterMsgSrc(MsgSource):
 
     async def query_task(self, args: List[str]) -> Optional[Message]:
         """
-        args: [query_type, uid, tid, pos, length]
+        args: [query_type, tid, pos ]
         """
 
-        uid, tid, pos, length = args[1], args[2], int(args[3]), int(args[4])
+        tid, pos = args[1], args[2]
 
         assert(config.mmanager is not None)
 
         # To check that whether the task's output message is able
         # to read.
         metaDB = cast(
-            PersistentDB, config.mmanager.getModule(PersistentDB.M_NAME))
+            PersistentDB,
+            config.mmanager.getModule(PersistentDB.M_NAME)
+        )
 
         assert(metaDB is not None)
 
@@ -214,11 +216,11 @@ class JobMasterMsgSrc(MsgSource):
             metaDB.open(tid)
 
         # Read output message
-        output_message = await metaDB.read(tid, length, pos)
+        output_message = await metaDB.readToTail(tid, pos)
 
         # Return message
         return TaskOutputMessage(
-            uid, tid, pos, length, output_message
+            uid, tid, pos, len(output_message), output_message
         )
 
 

@@ -316,7 +316,7 @@ def cmd_log_notify(msg: Tuple[str, str], arg: Any) -> None:
         return
 
     # Write to Tail of log file.
-    metaDB.write_sync(tid, content.encode(), TAIL)
+    metaDB.write_sync(tid, content, TAIL)
 
 
 async def binaryHandler(dl: DataLink, letter: BinaryLetter,
