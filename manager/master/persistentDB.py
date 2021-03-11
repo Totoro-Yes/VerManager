@@ -164,7 +164,7 @@ class PersistentDB(Module):
         self._seek_proc(ref, pos)
 
         for line in ref:
-            data += ref.readline()
+            data += line
 
         return data
 

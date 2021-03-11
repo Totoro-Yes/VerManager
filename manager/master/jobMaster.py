@@ -194,10 +194,13 @@ class JobMasterMsgSrc(MsgSource):
 
     async def query_task(self, args: List[str]) -> Optional[Message]:
         """
-        args: [query_type, tid, pos ]
+        args: [query_type, uid, tid, pos ]
         """
 
-        tid, pos = args[1], args[2]
+        uid, tid, pos = args[1], args[2], args[3]
+
+        # Prepend uid to tid
+        tid = prepend_prefix(uid, tid)
 
         assert(config.mmanager is not None)
 
