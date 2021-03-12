@@ -28,7 +28,7 @@ from functools import reduce
 from manager.models import Jobs, JobInfos, Informations, \
     JobHistory, TaskHistory
 from typing import Dict, Any, Tuple, Optional, cast, List
-from manager.master.dispatcher import Dispatcher
+from manager.master.dispatcher import Dispatcher, M_NAME as D_M_NAME
 from manager.master.job import Job
 from manager.master.exceptions import Job_Command_Not_Found, Job_Bind_Failed
 from manager.master.build import Build, BuildSet
@@ -197,7 +197,7 @@ class JobMasterMsgSrc(MsgSource):
         args: [query_type, uid, tid, pos ]
         """
 
-        uid, tid, pos = args[1], args[2], args[3]
+        uid, tid, pos = args[1], args[2], int(args[3])
 
         # Prepend uid to tid
         tid = prepend_prefix(uid, tid)
@@ -211,6 +211,11 @@ class JobMasterMsgSrc(MsgSource):
             config.mmanager.getModule(PersistentDB.M_NAME)
         )
 
+        dispatcher = cast(
+            Dispatcher,
+            config.mmanager.getModule(D_M_NAME)
+        )
+
         assert(metaDB is not None)
 
         if not metaDB.is_exists(tid):
@@ -218,12 +223,17 @@ class JobMasterMsgSrc(MsgSource):
         if not metaDB.is_open(tid):
             metaDB.open(tid)
 
+        if dispatcher.taskState(tid) == Task.STATE_FINISHED:
+            isFin = 1
+        else:
+            isFin = 0
+
         # Read output message
         output_message = await metaDB.readToTail(tid, pos)
 
         # Return message
         return TaskOutputMessage(
-            uid, tid, pos, len(output_message), output_message
+            uid, args[2], pos, len(output_message), output_message, isFin
         )
 
 

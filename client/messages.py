@@ -127,7 +127,8 @@ class JobAllResultsMessage(Message):
 class TaskOutputMessage(Message):
 
     def __init__(self, unique_id: str, taskid: str,
-                 pos: int, length: int, message: str) -> None:
+                 pos: int, length: int, message: str,
+                 last: int) -> None:
 
         Message.__init__(self, "job.msg.task.output", {
             "subtype": "output",
@@ -137,6 +138,7 @@ class TaskOutputMessage(Message):
                 "pos": pos,
                 "len": length,
                 "msg": message,
+                "last": last
             }
         })
 
