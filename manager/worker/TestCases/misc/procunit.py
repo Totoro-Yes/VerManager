@@ -110,8 +110,17 @@ class Connector:
 
     async def sendFile(self, linkid: str, tid: str, path: str,
                        version: str, fileName: str) -> bool:
-        return True
+        f = open(path, "rb")
 
+        for line in f:
+            bLetter = BinaryLetter(
+                tid=tid, bStr=line,
+                parent=version, fileName=fileName)
+            await self.q.put(bLetter)
+
+        f.close()
+
+        return True
 
 
 class ProcUnitStub_Dirty(ProcUnit):

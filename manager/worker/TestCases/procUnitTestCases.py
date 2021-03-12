@@ -205,9 +205,6 @@ class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(b'job\n', letter.getContent('bytes'))
             break
 
-        # Teardow
-        os.remove("Builds/job_result")
-
     async def test_JobProcUnit_Exists(self) -> None:
         # Setup
         self.sut.start()

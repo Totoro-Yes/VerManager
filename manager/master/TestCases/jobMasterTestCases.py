@@ -20,6 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import shutil
 import unittest
 import typing
 import manager.master.configs as config
@@ -37,6 +38,7 @@ from manager.master.jobMaster import command_var_replace, \
 from manager.master.build import Build
 from manager.basic.mmanager import MManager
 from manager.master.TestCases.misc.stubs import StorageStub
+from manager.master.persistentDB import PersistentDB
 
 
 class DispatcherFake(Endpoint):
@@ -76,8 +78,12 @@ class JobMasterTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Add StorageStub
         config.mmanager.addModule(StorageStub())
+        config.mmanager.addModule(PersistentDB("./MetaTest"))
 
         self.sut = JobMaster()
+
+    async def asyncTearDown(self) -> None:
+        shutil.rmtree("./MetaTest")
 
     async def test_JobMaster_Create(self) -> None:
         # Verify
