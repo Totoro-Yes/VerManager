@@ -24,12 +24,14 @@ import asyncio
 import multiprocessing
 import threading
 import traceback
+import abc
 from collections import namedtuple
 from manager.basic.letter import receving
-from typing import Dict, List, Callable, Tuple, Any, \
+from typing import Dict, List, Callable, Any, \
     Optional
 from asyncio import StreamReader, StreamWriter
 from manager.basic.mmanager import ModuleTDaemon
+from manager.basic.letter import Letter
 
 
 M_NAME = "DATALINKER"
@@ -72,19 +74,6 @@ class NOTIFIER_IS_ALREADY_EXISTS(Exception):
         return "Notifier " + self._tag + " is already exists."
 
 
-class DataLinkProcProtocol(asyncio.BaseProtocol):
-
-    def __init__(self, processor: Callable, args: Any) -> None:
-        self._processor = processor
-        self._args = args
-
-    def connection_made(self, transport: asyncio.BaseTransport) -> None:
-        self._transport = transport
-
-    def datagram_received(self, data, addr) -> None:
-        self._processor(data, self._args)
-
-
 class Notifier:
 
     def __init__(self, callback: Callable[[Any, Any], None], arg: Any) -> None:
@@ -95,21 +84,20 @@ class Notifier:
         self._cb(msg, self._arg)
 
 
-class DataLink:
+class DataLink(abc.ABC):
 
     TCP_DATALINK = "tcp"
     UDP_DATALINK = "udp"
+    PROTO = ""
 
-    def __init__(self, host: str, port: int, protocol: str,
+    def __init__(self, host: str, port: int,
                  processor: Callable[['DataLink', Any, Any], None],
                  args: Any, notify_q: multiprocessing.Queue) -> None:
         """
         protocol's value is TCP_DATALINK or UDP_DATALINK
         """
-
         self.host = host
         self.port = port
-        self._proto = protocol
         self._notifyQ = notify_q
 
         # Processor
@@ -136,14 +124,22 @@ class DataLink:
             asyncio.new_event_loop())
 
         try:
-            f = getattr(self, 'create_'+self._proto+'_datalink')
-            asyncio.run(f())
-        except AttributeError:
-            raise DATA_LINK_PROTO_NOT_SUPPORT(self._proto)
+            asyncio.run(self.datalink_create())
         except asyncio.exceptions.CancelledError:
             return
 
-    async def create_tcp_datalink(self) -> None:
+    @abc.abstractclassmethod
+    async def datalink_create(self) -> None:
+        """
+        Create datalink
+        """
+
+
+class TCPDataLink(DataLink):
+
+    PROTO = DataLink.TCP_DATALINK
+
+    async def datalink_create(self) -> None:
         assert(self._processor is not None)
 
         server = await asyncio.start_server(
@@ -162,20 +158,47 @@ class DataLink:
                 writer.close()
                 break
 
-    async def create_udp_datalink(self) -> None:
+
+class DataLinkProcProtocol(asyncio.BaseProtocol):
+
+    def __init__(self, dl: DataLink, processor: Callable, args: Any) -> None:
+        self._dl = dl
+        self._processor = processor
+        self._args = args
+
+    def connection_made(self, transport: asyncio.BaseTransport) -> None:
+        self._transport = transport
+
+    def datagram_received(self, data, addr) -> None:
+        letter = Letter.parse(data)
+        self._processor(self._dl, letter, self._args)
+
+
+class UDPDataLink(DataLink):
+
+    PROTO = DataLink.UDP_DATALINK
+
+    async def datalink_create(self) -> None:
         loop = asyncio.get_running_loop()
         transport, proto = await loop.create_datagram_endpoint(
-            lambda: DataLinkProcProtocol(self._processor, self._args),
+            lambda: DataLinkProcProtocol(self, self._processor, self._args),
             local_addr=(self.host, self.port)
         )
 
         while True:
+            if not self._p.is_alive:  # type: ignore
+                break
             await asyncio.sleep(3600)
 
         transport.close()
 
 
 class DataLinker(ModuleTDaemon):
+
+    SUPPORT_PROTOS = {
+        DataLink.TCP_DATALINK: TCPDataLink,
+        DataLink.UDP_DATALINK: UDPDataLink
+    }
 
     def __init__(self) -> None:
         # Init as a Thread ModuleDaemon
@@ -191,10 +214,14 @@ class DataLinker(ModuleTDaemon):
                     processor: Callable, args: Any) -> None:
 
         # No replicate.
-        if self.isLinkExists(host, port):
+        if self.isLinkExists(host, port, proto):
             return None
 
-        dl = DataLink(host, port, proto, processor, args, self._msgQueue)
+        if proto not in DataLinker.SUPPORT_PROTOS:
+            raise DATA_LINK_PROTO_NOT_SUPPORT(proto)
+
+        dl = DataLinker.SUPPORT_PROTOS[proto](
+            host, port, processor, args, self._msgQueue)
         self._links.append(dl)
 
     def addNotify(self, tag: str, cb: Callable[[Any, Any], None], arg: Any) -> None:
@@ -204,8 +231,11 @@ class DataLinker(ModuleTDaemon):
         notifier = Notifier(cb, arg)
         self._notify_cb[tag] = notifier
 
-    def isLinkExists(self, host: str, port: int) -> bool:
-        match = [dl for dl in self._links if host == dl.host and port == dl.port]
+    def isLinkExists(self, host: str, port: int, proto: str) -> bool:
+        match = [
+            dl for dl in self._links
+            if host == dl.host and port == dl.port and proto == dl.PROTO
+        ]
         return len(match) > 0
 
     def start(self) -> None:

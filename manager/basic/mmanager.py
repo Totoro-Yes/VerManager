@@ -86,6 +86,9 @@ class Module(ABC):
     def getName(self) -> str:
         return self._mName
 
+    def setName(self, name: str) -> None:
+        self._mName = name
+
     @abstractmethod
     async def begin(self) -> None:
         pass

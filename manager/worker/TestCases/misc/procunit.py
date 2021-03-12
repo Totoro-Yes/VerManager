@@ -67,7 +67,26 @@ async def logic_send_packet(unit: ProcUnit):
     await output.send(CommandLetter("Reply", {}), timeout=0)
 
 
+class Endpoint(asyncio.DatagramTransport):
+
+    datas = []  # type: typing.List[str]
+
+    def sendto(self, data, addr=None) -> None:
+        Endpoint.datas.append(Letter.parse(data))
+
+
+class DefautlDatagramProtocol(asyncio.DatagramProtocol):
+
+    def datagram_received(self, data, addr) -> None:
+        """
+        Do nothing
+        """
+        return
+
+
 class Connector:
+
+    dataes = []  # type: typing.List
 
     def __init__(self) -> None:
         self.q = asyncio.Queue(10)  # type: asyncio.Queue
@@ -75,15 +94,24 @@ class Connector:
     async def sendLetter(self, letter: Letter, timeout=None) -> None:
         await self.q.put(letter)
 
+    async def create_endpoint(
+            self, endpoint_id: str,
+            remote_address: typing.Tuple[str, int],
+            proto: asyncio.DatagramProtocol = DefautlDatagramProtocol()) -> None:
+        return
+
+    def get_endpoint(self, eid: str) -> typing.Any:
+        e = Endpoint()
+        self.dataes = e.datas
+        return e
+
+    def shutdown_endpoint(self, eid: str) -> None:
+        return None
+
     async def sendFile(self, linkid: str, tid: str, path: str,
                        version: str, fileName: str) -> bool:
-
-        with open("Builds/"+fileName, "rb") as fd:
-            for line in fd:
-                letter = BinaryLetter(tid, line, "menu", fileName)
-                await self.q.put(letter)
-
         return True
+
 
 
 class ProcUnitStub_Dirty(ProcUnit):

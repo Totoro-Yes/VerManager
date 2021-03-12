@@ -128,6 +128,14 @@ class TaskHistory(models.Model):
     state = models.CharField(max_length=10)
 
 
+class PersistentDBMeta(models.Model):
+    """
+    Metadatas used by PersistentDB
+    """
+    key = models.CharField(max_length=64, primary_key=True)
+    path = models.CharField(max_length=64)
+
+
 def infoBetweenRev(rev1: str, rev2: str) -> List[str]:
 
     make_sure_mysql_usable()

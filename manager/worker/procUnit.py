@@ -43,6 +43,7 @@ from manager.basic.letter import NewLetter, ResponseLetter,\
     BinaryLetter
 from manager.worker.connector import Link
 from manager.basic.info import Info
+from manager.worker.misc.jobProcUnitMisc import jobProcUnit_output_proc
 
 # Need by PostProcUnit
 from manager.basic.letter import PostTaskLetter
@@ -407,6 +408,7 @@ class JobProcUnit(JobProcUnitProto):
     async def _do_job(self, job: NewLetter) -> None:
         assert(self._config is not None)
         assert(self._channel is not None)
+        assert(self._output_space is not None)
 
         extra = job.getExtra()
         needPost = job.needPost()
@@ -442,9 +444,24 @@ class JobProcUnit(JobProcUnitProto):
         # notify job state
         await self._notify_job_state(tid, Letter.RESPONSE_STATE_IN_PROC)
 
-        # Run commands
+        # Create Endpoint that will be used to transfer command output
+        # to master
+        address = self._config.getConfig('MASTER_ADDRESS')
+
+        await self._output_space.async_call(
+            "conn", "create_endpoint", "LogEnd", (address['host'], address['dataPort']))
+        endpoint = self._output_space.call("conn", "get_endpoint", "LogEnd")
+
+        # Setup CommandExecutor
         self._cmd_executor.setCommand(commands)
+        self._cmd_executor.set_output_proc(
+            jobProcUnit_output_proc, tid, endpoint)
+
+        # Execute Command
         ret_code = await self._cmd_executor.run()
+
+        # Close endpoint
+        self._output_space.call("conn", "shutdown_endpoint", "LogEnd")
 
         # Error code handle
         if ret_code != 0:

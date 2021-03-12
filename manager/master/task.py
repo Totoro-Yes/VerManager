@@ -24,7 +24,7 @@ import unittest
 
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional, \
-    BinaryIO, Union, Any, Callable, cast
+    BinaryIO, Union, Any, Callable
 from functools import reduce
 from manager.basic.type import Ok, Error, State
 from manager.basic.letter import NewLetter, Letter, \

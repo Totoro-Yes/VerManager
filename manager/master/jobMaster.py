@@ -28,7 +28,7 @@ from functools import reduce
 from manager.models import Jobs, JobInfos, Informations, \
     JobHistory, TaskHistory
 from typing import Dict, Any, Tuple, Optional, cast, List
-from manager.master.dispatcher import Dispatcher
+from manager.master.dispatcher import Dispatcher, M_NAME as D_M_NAME
 from manager.master.job import Job
 from manager.master.exceptions import Job_Command_Not_Found, Job_Bind_Failed
 from manager.master.build import Build, BuildSet
@@ -38,13 +38,16 @@ from channels.layers import get_channel_layer
 from channels.db import database_sync_to_async
 from manager.master.job import VerResult
 from manager.basic.mmanager import Module
+from manager.basic.observer import Subject
+from manager.master.persistentDB import PersistentDB
 
 from client.messages import JobInfoMessage, JobStateChangeMessage, \
     JobFinMessage, JobFailMessage, JobBatchMessage, JobHistoryMessage, \
-    JobAllResultsMessage, JobNewResultMessage
+    JobAllResultsMessage, JobNewResultMessage, TaskOutputMessage
 
 from manager.master.msgCell import MsgSource
 from client.messages import Message
+
 
 JobCommandPrefix = "JOB_COMMAND_"
 
@@ -144,7 +147,7 @@ class JobMasterMsgSrc(MsgSource):
 
         return JobBatchMessage(msgs)
 
-    async def query_history(self, *args) -> Optional[Message]:
+    async def query_history(self, args: List[str]) -> Optional[Message]:
         jobs = []  # type: List[Job]
 
         jobs_history = await database_sync_to_async(
@@ -177,7 +180,7 @@ class JobMasterMsgSrc(MsgSource):
 
         return JobHistoryMessage(jobs)
 
-    async def query_files(self, *args) -> Optional[Message]:
+    async def query_files(self, args: List[str]) -> Optional[Message]:
 
         # Retrieve from database
         ver_results = await JobHistory.jobHistory_transformation(
@@ -189,14 +192,63 @@ class JobMasterMsgSrc(MsgSource):
         # Generate message
         return JobAllResultsMessage(ver_results)
 
+    async def query_task(self, args: List[str]) -> Optional[Message]:
+        """
+        args: [query_type, uid, tid, pos ]
+        """
 
-class JobMaster(Endpoint, Module):
+        uid, tid, pos = args[1], args[2], int(args[3])
+
+        # Prepend uid to tid
+        tid = prepend_prefix(uid, tid)
+
+        assert(config.mmanager is not None)
+
+        # To check that whether the task's output message is able
+        # to read.
+        metaDB = cast(
+            PersistentDB,
+            config.mmanager.getModule(PersistentDB.M_NAME)
+        )
+
+        dispatcher = cast(
+            Dispatcher,
+            config.mmanager.getModule(D_M_NAME)
+        )
+
+        assert(metaDB is not None)
+
+        if not metaDB.is_exists(tid):
+            return None
+        if not metaDB.is_open(tid):
+            metaDB.open(tid)
+
+        if dispatcher.taskState(tid) == Task.STATE_FINISHED:
+            isFin = 1
+        else:
+            isFin = 0
+
+        # Read output message
+        output_message = await metaDB.readToTail(tid, pos)
+
+        # Return message
+        return TaskOutputMessage(
+            uid, args[2], pos, len(output_message), output_message, isFin
+        )
+
+
+class JobMaster(Endpoint, Module, Subject):
 
     M_NAME = "JobMaster"
+    NOTIFY_LOG = "JobMasterLog"
 
     def __init__(self) -> None:
         Endpoint.__init__(self)
         Module.__init__(self, self.M_NAME)
+
+        # Subject init
+        Subject.__init__(self, self.M_NAME)
+        self.addType(self.NOTIFY_LOG)
 
         self._jobs = {}  # type: Dict[str, Job]
         self._config = config.config
@@ -285,7 +337,7 @@ class JobMaster(Endpoint, Module):
         self._jobs[str(job.unique_id)] = job
 
         # Bind Job with a job command
-        self.bind(job)
+        await self.bind(job)
 
         # Assign job to another module typically
         # is Dispatcher.
@@ -345,7 +397,7 @@ class JobMaster(Endpoint, Module):
         for job in jobs:
             await self._do_job(job)
 
-    async def handle(self, msg: Any) -> None:
+    async def handle(self, msg: Any) -> Any:
         """
         Peer should notify to JobMaster that
         which job's state is change.
@@ -372,7 +424,9 @@ class JobMaster(Endpoint, Module):
         # Maintain the Job's state
         await self._job_maintain(unique_id, state)
 
-    def bind(self, job: Job) -> None:
+        return
+
+    async def bind(self, job: Job) -> None:
         """
         Bind a job with a Job command that defined in
         configuration file, after binded a set of tasks
@@ -380,6 +434,7 @@ class JobMaster(Endpoint, Module):
         """
         # Configuration is needed
         assert(self._config is not None)
+        assert(config.mmanager is not None)
 
         job_command = self._config.getConfig(JobCommandPrefix + job.cmd_id)
 
@@ -389,11 +444,22 @@ class JobMaster(Endpoint, Module):
 
         # To check that is job command a build or buildset.
         if 'Builds' in job_command:
-            # Job Command is a BuildSet
+            # Job Command is a BuildSet(tid)
             self._bind_buildset(job, job_command)
         else:
             # Job Command is a Build
             self._bind_build(job, job_command)
+
+        # Register persistent place for each task of job.
+        metaDB = cast(PersistentDB, config.mmanager.getModule('Meta'))
+
+        for t in job.tasks():
+            # Create MetaInfo file for task
+            await database_sync_to_async(metaDB.create)(t.id())
+            metaDB.open(t.id())
+
+    async def _log(self, message: str) -> None:
+        await self.notify(self.NOTIFY_LOG, message)
 
     def _bind_buildset(self, job: Job, cmd: Dict) -> None:
         bs = BuildSet(cmd)

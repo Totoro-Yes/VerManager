@@ -43,14 +43,11 @@ from manager.master.eventListener \
 
 from manager.basic.type import Error
 from manager.basic.letter import Letter, \
-    ResponseLetter, BinaryLetter, NotifyLetter
+    ResponseLetter, BinaryLetter, NotifyLetter, TaskLogLetter
 
 from manager.master.task import Task, SingleTask, PostTask
-from manager.master.dispatcher import Dispatcher
 
 from manager.basic.storage import StoChooser
-
-from manager.master.dispatcher import M_NAME as DISPATCHER_M_NAME
 from manager.master.logger import Logger, M_NAME as LOGGER_M_NAME
 
 from manager.master.workerRoom import WorkerRoom, M_NAME as WR_M_NAME
@@ -59,6 +56,7 @@ from manager.basic.storage import M_NAME as STORAGE_M_NAME
 from manager.basic.util import pathSeperator
 from manager.basic.notify import Notify, WSCNotify
 from manager.basic.dataLink import DataLink, DataLinkNotify
+from manager.master.persistentDB import PersistentDB, TAIL
 
 ActionInfo = namedtuple('ActionInfo', 'isMatch execute args')
 path = str
@@ -126,7 +124,9 @@ class EVENT_HANDLER_TOOLS:
         self.ACTION_TBL[state].append(action)
 
     @classmethod
-    async def packDataWithChangeLog(self, vsn: str, filePath: str, dest: str) -> str:
+    async def packDataWithChangeLog(
+            self, vsn: str, filePath: str, dest: str) -> str:
+
         pathSplit = filePath.split("/")
         pathSplit[-1] = pathSplit[-1] + ".log.rar"
         zipPath = "/".join(pathSplit)
@@ -296,6 +296,31 @@ def job_result_url(unique_id: str, fileName: str) -> str:
     return DATA_URL + may_slash + unique_id + "/" + fileName
 
 
+def cmd_log_handler(dl: DataLink, letter: TaskLogLetter, args: Any) -> None:
+    """
+    args
+    """
+    tid = letter.getIdent()
+    msg = letter.getMessage()
+    dl.notify(DataLinkNotify("CMD_LOG", (tid, msg)))
+
+
+def cmd_log_notify(msg: Tuple[str, str], arg: Any) -> None:
+    assert(cfg.mmanager is not None)
+
+    tid = msg[0]
+    content = msg[1]
+
+    metaDB = cast(PersistentDB, cfg.mmanager.getModule(PersistentDB.M_NAME))
+
+    if not metaDB.is_exists(tid) or \
+       not metaDB.is_open(tid):
+        return
+
+    # Write to Tail of log file.
+    metaDB.write_sync(tid, content, TAIL)
+
+
 async def binaryHandler(dl: DataLink, letter: BinaryLetter,
                         env: Entry.EntryEnv) -> None:
     chooserSet = EVENT_HANDLER_TOOLS.chooserSet
@@ -379,7 +404,8 @@ class NotifyHandle:
             raise NOTIFY_NOT_MATCH_WITH_HANDLER(type)
 
     @classmethod
-    async def NOTIFY_H_WSC(self, env: Entry.EntryEnv, nl: NotifyLetter) -> None:
+    async def NOTIFY_H_WSC(self, env: Entry.EntryEnv,
+                           nl: NotifyLetter) -> None:
         """
         Change state of correspond worker.
         """

@@ -124,6 +124,25 @@ class JobAllResultsMessage(Message):
         })
 
 
+class TaskOutputMessage(Message):
+
+    def __init__(self, unique_id: str, taskid: str,
+                 pos: int, length: int, message: str,
+                 last: int) -> None:
+
+        Message.__init__(self, "job.msg.task.output", {
+            "subtype": "output",
+            "message": {
+                "uid": unique_id,
+                "task": taskid,
+                "pos": pos,
+                "len": length,
+                "msg": message,
+                "last": last
+            }
+        })
+
+
 class JobNewResultMessage(Message):
 
     def __init__(self, result: VerResult) -> None:

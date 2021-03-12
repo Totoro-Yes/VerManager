@@ -499,15 +499,17 @@ class Dispatcher(ModuleDaemon, Subject, Observer, Endpoint):
 
         await self.peer_notify((taskid, Task.STATE_STR_MAPPING[state]))
 
-    async def handle(self, data: Any) -> None:
-        cmd, task = data
+    async def handle(self, data: Any) -> Any:
+        cmd, content = data
 
         if cmd == Dispatcher.ENDPOINT_DISPATCH:
             # data :: Tuple[str, Task]
-            self.dispatch(task)
+            self.dispatch(content)
         elif cmd == Dispatcher.ENDPOINT_CANCEL:
             # data :: Tuple[str, str]
-            await self.cancel(task)
+            await self.cancel(content)
+
+        return
 
 
 # Misc

@@ -119,7 +119,7 @@ DATABASES = {
         'NAME': mysql_param_from_env('VERMNG_MYSQL_NAME','vermanager'),
         'USER': mysql_param_from_env('VERMNG_MYSQL_USER', 'verM'),
         'PASSWORD': mysql_param_from_env('VERMNG_MYSQL_PASSWD', '123456'),
-        'HOST': mysql_param_from_env('VERMNG_MYSQL_HOST', 'localhost'),
+        'HOST': mysql_param_from_env('VERMNG_MYSQL_HOST', '127.0.0.1'),
         'PORT': mysql_param_from_env('VERMNG_MYSQL_PORT', '3306')
     }
 }

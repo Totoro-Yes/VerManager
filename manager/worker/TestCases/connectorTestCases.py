@@ -25,10 +25,88 @@ import asyncio
 import unittest
 import manager.worker.TestCases.misc.linker as misc
 import manager.worker.configs as cfg
+import typing as T
 
-from manager.basic.letter import Letter
+from manager.basic.letter import Letter, NotifyLetter
 from manager.basic.info import Info
-from manager.worker.connector import Linker
+from manager.worker.connector import Linker, Connector
+
+
+class ServerProto(asyncio.DatagramProtocol):
+
+    def __init__(self, dataBox: T.List) -> None:
+        self.dataBox = dataBox
+
+    def datagram_received(self, data: bytes, addr) -> None:
+        self.dataBox.append(data.decode())
+
+
+class ServerProto_LParse(asyncio.DatagramProtocol):
+
+    def __init__(self, dataBox: T.List) -> None:
+        self.dataBox = dataBox
+
+    def datagram_received(self, data: bytes, addr) -> None:
+        letter = Letter.parse(data)
+        self.dataBox.append(letter)
+
+
+class ClientProto(asyncio.DatagramProtocol):
+
+    def datagram_received(self, data, addr) -> None:
+        return
+
+
+class ConnectorTestCases(unittest.IsolatedAsyncioTestCase):
+
+    async def asyncSetUp(self) -> None:
+        cfg.config = Info("manager/worker/TestCases/misc/jobprocunit_config.yaml")
+        self.connector = Connector()
+
+    async def test_Connector_CreateEndpoint(self) -> None:
+        # Setup
+        dataBox = []  # type: T.List[str]
+
+        transport, _ = await asyncio.get_running_loop()\
+            .create_datagram_endpoint(
+                lambda: ServerProto(dataBox),
+                local_addr=("127.0.0.1", 3501)
+            )
+
+        # Exercise
+        await self.connector.create_endpoint(
+            "E1", ("127.0.0.1", 3501), proto=ClientProto())
+        endpoint = self.connector.get_endpoint("E1")
+        if endpoint is None:
+            self.fail("endpoint is not created")
+
+        endpoint.sendto(b"123456")  # type: ignore
+        await asyncio.sleep(1)
+
+        # Verify
+        self.assertEqual(["123456"], dataBox)
+
+    async def test_Connector_SendDatagramViaEndpoint(self) -> None:
+        # Setup
+        dataBox = []  # type: T.List[Letter]
+
+        transport, _ = await asyncio.get_running_loop()\
+            .create_datagram_endpoint(
+                lambda: ServerProto_LParse(dataBox),
+                local_addr=("127.0.0.1", 3501)
+            )
+        await self.connector.create_endpoint(
+            "E1", ("127.0.0.1", 3501), proto=ClientProto()
+        )
+
+        # Exercise
+        self.connector.sendDatagram_bytes(
+            "E1", b"DATA",
+            lambda data: NotifyLetter("A1", "TT", {"data": data.decode()}))
+        await asyncio.sleep(1)
+
+        # Verify
+        self.assertEqual("DATA", dataBox[0].getContent('data'))
 
 
 class LinkerTestCases(unittest.IsolatedAsyncioTestCase):

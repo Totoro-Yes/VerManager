@@ -105,3 +105,29 @@ class CUSTOM_FUNC_DOC_GEN_FAIL(Exception):
 
     def __str__(self) -> str:
         return "doc_gen raise an exception: " + str(self.excep)
+
+
+###############################################################################
+#                                  JobMaster                                  #
+###############################################################################
+class UNABLE_TO_CREATE_META_FILE(Exception):
+
+    def __init__(self, jobid: str, taskid: str) -> None:
+        self.jobid = jobid
+        self.taskid = taskid
+
+    def __str__(self) -> str:
+        return "Unable to create meta file for (" \
+            + self.jobid + "," + self.taskid + ")"
+
+
+###############################################################################
+#                                 PersistentDB                                #
+###############################################################################
+class PERSISTENT_DB_FILE_NOT_EXISTS(Exception):
+
+    def __init__(self, filename: str) -> None:
+        self.filename = filename
+
+    def __str__(self) -> str:
+        return "File " + self.filename + " is not found in PersistentDB"

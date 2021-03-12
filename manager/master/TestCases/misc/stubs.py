@@ -20,25 +20,52 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import typing
-import abc
 
+from typing import Optional, BinaryIO
 
-class Endpoint(abc.ABC):
+Ok = 1
+State = int
+
+class StoChooser:
 
     def __init__(self) -> None:
-        self._peer = None  # type: typing.Optional[Endpoint]
+        self._path = ""
 
-    def set_peer(self, endpoint: 'Endpoint') -> None:
-        self._peer = endpoint
-        endpoint._peer = self
+    def fd(self) -> BinaryIO:
+        return self._fd
 
-    async def peer_notify(self, data: typing.Any) -> typing.Any:
-        assert(self._peer is not None)
-        return await self._peer.handle(data)
+    def setFd(self, fd) -> State:
+        self._fd = fd
 
-    @abc.abstractmethod
-    async def handle(self, data: typing.Any) -> typing.Any:
-        """
-        Respond to peer's notification.
-        """
+        return Ok
+
+    def path(self) -> str:
+        return self._path
+
+    def isValid(self) -> bool:
+        return True
+
+    def store(self, content: bytes) -> None:
+        fd = self._fd
+        fd.write(content)
+
+    def retrive(self, count: int) -> bytes:
+        fd = self._fd
+        content = fd.read(count)
+        return content
+
+    def close(self) -> State:
+        return Ok
+
+    def rewind(self) -> None:
+        fd = self._fd
+        fd.seek(0, 0)
+
+
+class StorageStub:
+
+    def create(self, boxName: str, fileName: str) -> Optional[StoChooser]:
+        return StoChooser()
+
+    def getName(self) -> str:
+        return 'meta'

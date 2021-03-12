@@ -214,7 +214,7 @@ class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Exercise
         job = NewLetter("Job", "123456", "v1", "",
-                        {'cmds': ["sleep 10", "echo job > job_result"],
+                        {'cmds': ["echo job > job_result", "echo 123"],
                          'resultPath': "./job_result"})
         job1 = NewLetter("Job1", "123456", "v1", "",
                          {'cmds': ["sleep 10", "echo job > job_result"],
@@ -276,6 +276,23 @@ class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.sut.exists("Job"))
         self.assertTrue(self.sut.exists("Job2"))
         self.assertFalse(self.sut.exists("Job1"))
+
+    async def test_JobProcUnit_CommandLog(self) -> None:
+        # Setup
+        self.sut.start()
+
+        # Exercise
+        job = NewLetter("Job", "123456", "v1", "",
+                        {'cmds': ["echo 123"],
+                         'resultPath': "./job_result"})
+
+        await self.sut._normal_space.put(job)
+        await asyncio.sleep(1)
+
+        # Verify
+        dataes = self.connector.dataes
+        self.assertTrue(len(dataes) == 1)
+        self.assertEqual("123\n", dataes[0].getContent("message"))
 
 
 class PostProcUnitTestCases(unittest.IsolatedAsyncioTestCase):

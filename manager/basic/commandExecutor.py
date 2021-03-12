@@ -21,12 +21,12 @@
 # SOFTWARE.
 
 import asyncio
-import tempfile
 from datetime import datetime
 import subprocess
 from manager.basic.util import packShellCommands, execute_shell, \
     stop_ps_recursive_async
-from typing import List, Optional, IO
+from typing import List, Optional, Callable, Any
+from concurrent.futures import ThreadPoolExecutor
 
 
 class CommandExecutor:
@@ -35,16 +35,17 @@ class CommandExecutor:
         self._cmds = cmds  # type: Optional[List[str]]
         self._max_stucked_time = 3600
         self._running = False
-        self._last_stucked = None  # type: Optional[datetime]
-        self._last_pos = 0
         self._ret = 0
         self._ref = None  # type: Optional[subprocess.Popen]
         self._pid = 0
+        self.isStucked = False
+        self._last_active = datetime.utcnow()
+        self._isMonitorInProgress = False
+        self._output_proc = None  # type: Optional[Callable]
+        self._output_proc_args = None  # type: Any
 
     def _reset(self) -> None:
         self._running = False
-        self._last_pos = 0
-        self._last_stucked = None
 
     def pid(self) -> int:
         return self._pid
@@ -62,31 +63,40 @@ class CommandExecutor:
         if self._cmds is None:
             return -1
 
-        command_str = packShellCommands(self._cmds)
-        output = tempfile.TemporaryFile("w")
-
         self._running = True
 
-        ref = execute_shell(command_str, stdout=output, stderr=output)
+        command_str = packShellCommands(self._cmds)
+        ref = execute_shell(
+            command_str,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+
         if ref is None:
             self._ret = -1
             self._reset()
             return -1
-        else:
-            self._ref = ref
-            self._pid = ref.pid
+
+        self._ref = ref
+        self._pid = ref.pid
+
+        self._makeMonitor()
 
         while True:
             # Check whether the command done
             ret = ref.poll()
             if ret is not None:
+                # Wait monitor done
+                while self._isMonitorInProgress:
+                    await asyncio.sleep(1)
+
                 self._ret = ret
                 break
 
             # Check whether the command is stucked
-            if self.isStucked(output):
+            diff = (datetime.utcnow() - self._last_active).seconds
+            if diff > self._max_stucked_time:
                 self._ret = -1
-                ref.terminate()
+                await self.stop()
                 break
 
             await asyncio.sleep(1)
@@ -100,30 +110,60 @@ class CommandExecutor:
         self._reset()
         return ret
 
+    def _makeMonitor(self) -> None:
+        """
+        Create a monitor to make sure a command is not
+        idle state forever.
+        """
+        asyncio.get_running_loop()\
+            .create_task(self._monitor())
+
+    async def _monitor(self) -> None:
+        self._isMonitorInProgress = True
+
+        if self._ref is None:
+            return None
+
+        handle = self._ref.stdout
+        # handle must not None
+        assert(handle is not None)
+
+        loop = asyncio.get_running_loop()
+        e = ThreadPoolExecutor()
+
+        while True:
+            # Read a KiB datas from output.
+            datas = b""
+            r_count = 0
+
+            while r_count < 1024:
+                # Stdout is already setup by run(), ignore
+                # warning.
+                line = await loop.run_in_executor(e, handle.readline)
+
+                if line == b"":
+                    break
+
+                self._last_active = datetime.utcnow()
+                r_count += len(line)
+                datas += line
+
+            # No output and command is done.
+            if datas == b"":
+                self._isMonitorInProgress = False
+                return
+
+            # Process output datas if needed.
+            if self._output_proc is not None:
+                await self._output_proc(datas, *self._output_proc_args)
+
+        e.shutdown()
+
     def return_code(self) -> int:
         return self._ret
 
     def isRunning(self) -> bool:
         return self._running
-
-    def isStucked(self, output: IO[str]) -> bool:
-        current_pos = output.tell()
-
-        # Stucked from last position
-        if current_pos == self._last_pos:
-            current = datetime.utcnow()
-            if self._last_stucked is None:
-                self._last_stucked = datetime.utcnow()
-            else:
-                # Stucked timeout
-                return (current - self._last_stucked).seconds > \
-                    self._max_stucked_time
-        else:
-            if self._last_stucked is not None:
-                self._last_stucked = None
-            self._last_pos = current_pos
-
-        return False
 
     def getStuckedLimit(self) -> int:
         return self._max_stucked_time
@@ -133,3 +173,7 @@ class CommandExecutor:
 
     def setCommand(self, cmds: List[str]) -> None:
         self._cmds = cmds
+
+    def set_output_proc(self, proc: Callable, *args) -> None:
+        self._output_proc = proc
+        self._output_proc_args = args

@@ -38,6 +38,22 @@ async def data_processor(dl: DataLink, data: typing.Any, args: typing.Any) -> No
         dl.notify(notify)
 
 
+def data_processor_udp(dl: DataLink, data: typing.Any, args: typing.Any) -> None:
+    received_data = args
+    n = int(data.getHeader('ident'))
+    received_data.append(n)
+
+    if n == 9:
+        notify = DataLinkNotify("Data", "SendDone")
+        dl.notify(notify)
+
+
+class ClientProtocol(asyncio.BaseProtocol):
+
+    def connection_made(self, transport: asyncio.BaseTransport) -> None:
+        self._transport = transport
+
+
 class DataLinkerTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
@@ -69,6 +85,40 @@ class DataLinkerTestCases(unittest.IsolatedAsyncioTestCase):
             await sending(w, letter)
             await w.drain()
             n += 1
+        await asyncio.sleep(1)
+
+        # Verify
+        self.assertEqual(["SendDone"], notify_content)
+
+        self.dlinker.stop()
+
+    async def test_DataLinker_UDP_ProcessData(self) -> None:
+        # Setup
+        received_data = []  # type: typing.List
+        notify_content = []  # type: typing.List
+
+        # Register Processor
+        self.dlinker.addDataLink("127.0.0.1", 3501, DataLink.UDP_DATALINK,
+                                 # Processor
+                                 data_processor_udp,
+                                 # Processor args
+                                 received_data)
+        self.dlinker.addNotify("Data", lambda msg, arg: notify_content.append(msg), None)
+
+        transport, protocol = await asyncio.get_running_loop()\
+            .create_datagram_endpoint(lambda: ClientProtocol(), remote_addr=('127.0.0.1', 3501))
+
+        # Exercise
+        self.dlinker.start()
+        await asyncio.sleep(1)
+
+        n = 0
+
+        while n < 10:
+            letter = NotifyLetter(str(n), str(n), {})
+            transport.sendto(letter.toBytesWithLength())
+            n += 1
+
         await asyncio.sleep(1)
 
         # Verify

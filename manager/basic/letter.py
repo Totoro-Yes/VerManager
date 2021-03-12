@@ -175,6 +175,14 @@ class Letter:
     """
     Heartbeat = "Hb"
 
+    """
+    Formath of TaskLogLetter
+    Type    : "TL"
+    Header  : {ident":...}
+    content : {"message":...}
+    """
+    TaskLog = "TL"
+
     Notify = "Notify"
 
     BINARY_HEADER_LEN = 260
@@ -898,6 +906,32 @@ class HeartbeatLetter(Letter):
         return HeartbeatLetter(header['ident'], header['seq'])
 
 
+class TaskLogLetter(Letter):
+    """
+    Contain message of output of running task.
+    """
+
+    def __init__(self, tid: str, message: str) -> None:
+        Letter.__init__(self, Letter.TaskLog,
+                        {"ident": tid},
+                        {"message": message})
+
+    def getIdent(self) -> str:
+        return self.getHeader('ident')
+
+    def getMessage(self) -> str:
+        return self.getContent("message")
+
+    @staticmethod
+    def parse(s: bytes) -> Optional['TaskLogLetter']:
+        (type_, header, content) = bytesDivide(s)
+
+        if type_ != Letter.TaskLog:
+            return None
+
+        return TaskLogLetter(header['ident'], content['message'])
+
+
 validityMethods = {
     Letter.NewTask:         newTaskLetterValidity,
     Letter.Response:        responseLetterValidity,
@@ -913,6 +947,7 @@ validityMethods = {
     Letter.Req:             lambda letter: True,
     Letter.Heartbeat:       lambda letter: True,
     Letter.Notify:          lambda letter: True,
+    Letter.TaskLog:         lambda letter: True,
 }  # type:   Dict[str, Callable]
 
 parseMethods = {
@@ -928,7 +963,8 @@ parseMethods = {
     Letter.TaskCancel:       CancelLetter,
     Letter.Req:              ReqLetter,
     Letter.Heartbeat:        HeartbeatLetter,
-    Letter.Notify:           NotifyLetter
+    Letter.Notify:           NotifyLetter,
+    Letter.TaskLog:          TaskLogLetter
 }  # type: Any
 
 
