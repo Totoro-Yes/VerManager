@@ -78,7 +78,8 @@ def task_gen_helper(id: str, state: str) -> Task:
     return t
 
 
-def command_var_replace(cmds: List[str], vars: List[Tuple[str, str]]) -> List[str]:
+def command_var_replace(cmds: List[str],
+                        vars: List[Tuple[str, str]]) -> List[str]:
     trans = []  # type: List[str]
     for cmd in cmds:
         trans.append(
@@ -92,7 +93,8 @@ def command_path_format_transform(cmds: List[str]) -> List[str]:
     return [cmd.replace("\\", "/") for cmd in cmds]
 
 
-def command_preprocessing(cmds: List[str], vars: List[Tuple[str, str]]) -> List[str]:
+def command_preprocessing(cmds: List[str],
+                          vars: List[Tuple[str, str]]) -> List[str]:
     # Replace variables
     cmds = command_var_replace(cmds, vars)
     # Make sure all command use "/" as path seperator.
@@ -210,19 +212,15 @@ class JobMasterMsgSrc(MsgSource):
             PersistentDB,
             config.mmanager.getModule(PersistentDB.M_NAME)
         )
-
-        dispatcher = cast(
-            Dispatcher,
-            config.mmanager.getModule(D_M_NAME)
-        )
-
-        assert(metaDB is not None)
-
         if not metaDB.is_exists(tid):
             return None
         if not metaDB.is_open(tid):
             metaDB.open(tid)
 
+        dispatcher = cast(
+            Dispatcher,
+            config.mmanager.getModule(D_M_NAME)
+        )
         if dispatcher.taskState(tid) == Task.STATE_FINISHED:
             isFin = 1
         else:
