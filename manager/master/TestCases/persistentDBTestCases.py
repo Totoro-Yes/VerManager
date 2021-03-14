@@ -112,3 +112,12 @@ class PersistentDBTestCases(unittest.IsolatedAsyncioTestCase):
 
         await self.sut.close("TEST")
         self.assertFalse(self.sut.is_open("TEST"))
+
+    async def test_PDB_Recover(self) -> None:
+
+        os.mknod("./PersistentDB/R")
+        meta = await database_sync_to_async(PersistentDBMeta)(key="R", path="./PersistentDB/R")
+        await database_sync_to_async(meta.save)()
+
+        await self.sut.begin()
+        self.assertTrue(self.sut.is_exists("R"))

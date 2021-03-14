@@ -29,7 +29,7 @@ from collections import namedtuple
 from manager.models import PersistentDBMeta
 from manager.basic.mmanager import Module
 from manager.master.exceptions import PERSISTENT_DB_FILE_NOT_EXISTS
-from channels.db import database_sync_to_async
+from channels.db import database_sync_to_async as db_s_2_as
 
 
 FileRefInfo = namedtuple('FileRefInfo', ['ref', 'lock'])
@@ -60,10 +60,22 @@ class PersistentDB(Module):
         self._loop = asyncio.get_running_loop()
 
     async def begin(self) -> None:
-        return
+        # Recover status to last shutdown
+        await self._recover()
 
     async def cleanup(self) -> None:
         return
+
+    async def _recover(self) -> None:
+        items = await db_s_2_as(PersistentDBMeta.objects.all)()
+        items_list = await db_s_2_as(list)(items)
+
+        for item in items_list:
+            # Miss, just ignore
+            if not os.path.exists(item.path):
+                continue
+            else:
+                self._files[item.key] = item.path
 
     def create(self, key: str) -> None:
 
@@ -72,7 +84,7 @@ class PersistentDB(Module):
         # Try to create file
         if key in self._files:
             return
-        else:
+        elif not os.path.exists(path):
             os.mknod(path)
 
         self._files[key] = path
@@ -121,7 +133,7 @@ class PersistentDB(Module):
 
         # Remove meta info from db
         meta = PersistentDBMeta(pk=key)
-        await database_sync_to_async(meta.delete)()
+        await db_s_2_as(meta.delete)()
 
     async def _atomic_op(self, key: str, cb: T.Callable, *args) -> T.Any:
         refinfo = None  # type: T.Optional[FileRefInfo]
