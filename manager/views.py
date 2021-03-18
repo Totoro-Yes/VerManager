@@ -38,6 +38,7 @@ from .serializers import VersionSerializer, RevisionSerializer, \
     BuildInfoSerializer, VersionInfoSerializer, JobHistorySerializer
 from manager.master.jobMaster import JobMaster
 from manager.master.job import Job
+from manager.master.verControl import M_NAME as RS_M_NAME
 
 import manager.master.master as S
 
@@ -189,5 +190,9 @@ def verManagerPage(request):
 
 @csrf_exempt
 def newRev(request):
-    RevSync.revNewPush(request)
+    assert(S.ServerInstance is not None)
+
+    revSync = cast(JobMaster, S.ServerInstance.getModule(RS_M_NAME))
+    revSync.revNewPush(request)
+
     return HttpResponse()
