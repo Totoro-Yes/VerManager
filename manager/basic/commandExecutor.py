@@ -69,7 +69,7 @@ class CommandExecutor:
         ref = execute_shell(
             command_str,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE)
+            stderr=subprocess.STDOUT)
 
         if ref is None:
             self._ret = -1
@@ -84,6 +84,7 @@ class CommandExecutor:
         while True:
             # Check whether the command done
             ret = ref.poll()
+
             if ret is not None:
                 # Wait monitor done
                 while self._isMonitorInProgress:
