@@ -102,29 +102,29 @@ class Worker:
                 DataLink.TCP_DATALINK, binaryStore, "./Post")
             dataLinker.addNotify("BINARY", binaryStoreNotify, processor)
             dataLinker.start()
+        else:
+            # Create Link to Merger if exists.
+            if merger_address != '':
+                host_addr = merger_address['host']
+                if host_addr == '0.0.0.0':
+                    host_addr = socket.gethostbyname(socket.gethostname())
+                    await connector.open_connection('Poster', host_addr,
+                                                    merger_address['port'])
 
-        # Create Link to Merger if exists.
-        if merger_address != '':
-            host_addr = merger_address['host']
-            if host_addr == '0.0.0.0':
-                host_addr = socket.gethostbyname(socket.gethostname())
-            await connector.open_connection('Poster', host_addr,
-                                            merger_address['port'])
+            # Create ProcUnits and
+            # Install ProcUnits into Processor
+            jobProcUnit = JobProcUnit("Job")
+            processor.install_unit(jobProcUnit)
 
-        # Create ProcUnits and
-        # Install ProcUnits into Processor
-        jobProcUnit = JobProcUnit("Job")
-        processor.install_unit(jobProcUnit)
+            # Connector need info of JobProcUnit
+            # so register an channel between them
+            processor.register("Job", connector)
 
-        # Connector need info of JobProcUnit
-        # so register an channel between them
-        processor.register("Job", connector)
+            # Setup dispatch
+            processor.set_type_dispatch_to_unit(Letter.NewTask, "Job")
 
-        # Setup dispatch
-        processor.set_type_dispatch_to_unit(Letter.NewTask, "Job")
-
-        # Start Processor
-        processor.start()
+            # Start Processor
+            processor.start()
 
         # Debug
         if configs.debug:
