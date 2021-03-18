@@ -30,6 +30,11 @@ async def jobProcUnit_output_proc(datas: bytes, *args) -> None:
     args: [taskid, endpoint]
     """
     taskid, endpoint = args[0], args[1]  # type: str, asyncio.DatagramTransport
-    letter = TaskLogLetter(taskid, datas.decode())
+
+    try:
+        decoded_datas = datas.decode("ANSI")
+        letter = TaskLogLetter(taskid, decoded_datas)
+    except Exception:
+        return None
 
     endpoint.sendto(letter.toBytesWithLength())

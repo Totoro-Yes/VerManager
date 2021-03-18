@@ -92,7 +92,7 @@ class Worker:
         # counters[STATE_ONLINE] : online_counter
         # counters[STATE_WAITING] : wait_counter
         # counters[STATE_OFFLINE] : offline_counter
-        self.counters = [0, 0, 0]
+        self.counters = [0, 0, 0, 0, 0]
         self._clock = datetime.now()
 
     def getStream(self) -> Tuple[asyncio.StreamReader, asyncio.StreamWriter]:
