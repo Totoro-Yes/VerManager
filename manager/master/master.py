@@ -160,8 +160,8 @@ class ServerInst(Thread):
         metaInfos = PersistentDB(info.getConfig('Meta'))
         self.addModule(metaInfos)
 
-        #revSyncner = RevSync()
-        #self.addModule(revSyncner)
+        revSyncner = RevSync()
+        self.addModule(revSyncner)
 
         # Subscribe to subjects
         eventListener.subscribe(EventListener.NOTIFY_LOST, workerRoom)
