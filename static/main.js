@@ -22,15 +22,11 @@ module.exports = __webpack_require__(/*! /home/ayden/Codebase/VerManager-Front/s
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Channel", function() { return Channel; });
-class Channel {
-    constructor(socket) {
-        this.socket = socket;
-    }
-    subscribe(observer) {
-        return this.socket.subscribe(observer);
-    }
-    sendMsg(data) {
-        this.socket.next(data);
+/* harmony import */ var rxjs_webSocket__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! rxjs/webSocket */ "3uOa");
+
+class Channel extends rxjs_webSocket__WEBPACK_IMPORTED_MODULE_0__["WebSocketSubject"] {
+    constructor(url) {
+        super(url);
     }
 }
 
@@ -83,6 +79,399 @@ RevisionService.ɵprov = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineI
 
 /***/ }),
 
+/***/ "8R7l":
+/*!***************************************!*\
+  !*** ./src/app/task-state.service.ts ***!
+  \***************************************/
+/*! exports provided: TaskStateService */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "TaskStateService", function() { return TaskStateService; });
+/* harmony import */ var _angular_core__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @angular/core */ "fXoL");
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! rxjs */ "qCKp");
+/* harmony import */ var rxjs_operators__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! rxjs/operators */ "kU1M");
+/* harmony import */ var _message__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./message */ "oqF8");
+/* harmony import */ var _message_service__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./message.service */ "OdHV");
+
+
+
+
+
+
+;
+class TaskStateService {
+    constructor(msg_service) {
+        this.msg_service = msg_service;
+        this.database_name = "TaskInfo";
+        this.log_store_name = "TaskLog";
+        this.database = undefined;
+        /**
+         * An container to place taks log content,
+         * each task has space no more than cache_limit's value.
+         * If content is execeed the limit then the content of
+         * cache will flush into IndexedDB as a Blob.
+         */
+        this.log_cache = {};
+        this.log_pos = {};
+        // Unit is KB
+        this.cache_limit = 1024;
+        // Unstable Task info
+        this.unstable_tasks = [];
+        // Register message
+        this.msg_src = this.msg_service
+            .register(msg => msg.type == "job.msg.task.output");
+    }
+    taskLogMessage(uid, tid) {
+        // combine uid and tid to generate a
+        // global uniqu id
+        tid = uid + "_" + tid;
+        // Is log exist in IndexedDB ?
+        return this.is_item_exists(tid).pipe(Object(rxjs_operators__WEBPACK_IMPORTED_MODULE_2__["concatMap"])(exists => this.load_task(tid, exists)));
+    }
+    cleanPersistentData() {
+        let cleared = undefined;
+        let db = this.access_db();
+        if (db == null) {
+            return;
+        }
+        db.subscribe(db => {
+            let transaction = db.transaction([this.log_store_name], "readwrite");
+            let obStore = transaction.objectStore(this.log_store_name);
+            let req = obStore.clear();
+            req.onsuccess = _ => {
+                cleared = true;
+            };
+            req.onerror = _ => {
+                cleared = false;
+            };
+        });
+        return new rxjs__WEBPACK_IMPORTED_MODULE_1__["Observable"](ob => {
+            let intvl = setInterval(() => {
+                if (cleared != undefined) {
+                    ob.next(cleared);
+                    ob.complete();
+                    clearInterval(intvl);
+                }
+            }, 1000);
+        });
+    }
+    access_db() {
+        if (this.database == undefined || this.database == null) {
+            // Open database
+            const request = indexedDB.open(this.database_name, 1);
+            request.onupgradeneeded = (event) => {
+                let database = request.result;
+                database.createObjectStore(this.log_store_name, { keyPath: "tid" });
+            };
+            request.onsuccess = (event) => {
+                this.database = request.result;
+            };
+            request.onerror = (event) => {
+                this.database = null;
+            };
+        }
+        return new rxjs__WEBPACK_IMPORTED_MODULE_1__["Observable"](ob => {
+            let intvl = setInterval(() => {
+                if (typeof this.database != 'undefined') {
+                    ob.next(this.database);
+                    clearInterval(intvl);
+                    ob.complete();
+                }
+                else if (this.database == null) {
+                    clearInterval(intvl);
+                    ob.complete();
+                }
+            }, 100);
+        });
+    }
+    is_item_exists(tid) {
+        let exists = undefined;
+        let db = this.access_db();
+        if (db == null) {
+            // Assume that the log message is not exists
+            return Object(rxjs__WEBPACK_IMPORTED_MODULE_1__["from"])([false]);
+        }
+        db.subscribe(db => {
+            let transaction = db.transaction([this.log_store_name]);
+            let obStore = transaction.objectStore(this.log_store_name);
+            // ifa the ObjectStore is exists then there must
+            // exist an object with key is '0', cause the
+            // blob which key is '0', is the first object
+            // store into ObjectStore.
+            let req = obStore.openCursor(tid);
+            req.onsuccess = (event) => {
+                let cursor = req.result;
+                if (cursor) {
+                    exists = true;
+                }
+                else {
+                    exists = false;
+                }
+            };
+            req.onerror = (event) => {
+                exists = false;
+            };
+        });
+        return new rxjs__WEBPACK_IMPORTED_MODULE_1__["Observable"](ob => {
+            let counter = setInterval(() => {
+                if (typeof exists != 'undefined') {
+                    clearInterval(counter);
+                    ob.next(exists);
+                    ob.complete();
+                }
+            }, 1000);
+        });
+    }
+    load_task(tid, isLocal) {
+        if (isLocal) {
+            return this.load_task_log_from_local(tid).pipe(
+            // If there is only part of log reside
+            // on local then need to load rest of log
+            // from master
+            Object(rxjs_operators__WEBPACK_IMPORTED_MODULE_2__["concatMap"])(msg => (() => {
+                if (msg == null) {
+                    return this.load_task_log_from_remote(tid);
+                }
+                else {
+                    return Object(rxjs__WEBPACK_IMPORTED_MODULE_1__["from"])([msg]);
+                }
+            })()));
+        }
+        else {
+            return this.load_task_log_from_remote(tid);
+        }
+    }
+    // precondition: item exist in IndexedDB
+    load_task_log_from_local(tid) {
+        let load_success = undefined;
+        let log_messages = undefined;
+        let db = this.access_db();
+        if (db == null) {
+            // Fail to access database return empty message.
+            return Object(rxjs__WEBPACK_IMPORTED_MODULE_1__["from"])([""]);
+        }
+        db.subscribe(db => {
+            let transaction = db.transaction([this.log_store_name]);
+            let obStore = transaction.objectStore(this.log_store_name);
+            let req = obStore.get(tid);
+            req.onsuccess = () => {
+                log_messages = req.result;
+                load_success = true;
+            };
+            req.onerror = () => {
+                load_success = false;
+            };
+        });
+        return new rxjs__WEBPACK_IMPORTED_MODULE_1__["Observable"](ob => {
+            let intvl = setInterval(() => {
+                if (load_success == true && typeof log_messages != 'undefined') {
+                    if (!(tid in this.log_pos)) {
+                        this.log_pos[tid] = log_messages.length;
+                    }
+                    this.load_task_log_from_local_internal(ob, log_messages.logBlobs, log_messages.fin);
+                    clearInterval(intvl);
+                }
+                else if (load_success == false) {
+                    ob.next("");
+                    ob.complete();
+                    clearInterval(intvl);
+                }
+            });
+        });
+    }
+    load_task_log_from_local_internal(ob, messages, isFin) {
+        let prev = messages[0].text();
+        let proc_messages = messages.slice(1, messages.length);
+        for (let msg of proc_messages) {
+            prev = prev.then(text => {
+                ob.next(text);
+                return msg.text();
+            });
+        }
+        prev.then(text => {
+            ob.next(text);
+            if (isFin) {
+                ob.next("");
+            }
+            else {
+                ob.next(null);
+            }
+            ob.complete();
+        });
+    }
+    load_task_log_from_remote(id) {
+        let pos;
+        let uid = id.split("_")[0];
+        if (!(id in this.log_pos)) {
+            // No position info about the task
+            // so there is no log file on local
+            // and set pos to 0, with 0 system
+            // able to get all data of log.
+            pos = this.log_pos[id] = 0;
+        }
+        else {
+            pos = this.log_pos[id];
+        }
+        let tid = id.slice(id.indexOf("_") + 1, id.length);
+        // Send first request
+        let event = new _message__WEBPACK_IMPORTED_MODULE_3__["QueryEvent"]([
+            "task", uid, tid,
+            pos
+        ]);
+        this.msg_service.sendMsg(event);
+        return this.retrieve_log_msg(id).pipe(Object(rxjs_operators__WEBPACK_IMPORTED_MODULE_2__["concatMap"])(msg => {
+            // Only part of log content on local
+            // try to request more content
+            if (msg.content.message.last == 0) {
+                let event = new _message__WEBPACK_IMPORTED_MODULE_3__["QueryEvent"]([
+                    "task", uid, tid,
+                    this.log_pos[id]
+                ]);
+                this.msg_service.sendMsg(event);
+            }
+            return Object(rxjs__WEBPACK_IMPORTED_MODULE_1__["from"])([msg]);
+        }), 
+        // Cache the message
+        Object(rxjs_operators__WEBPACK_IMPORTED_MODULE_2__["concatMap"])(msg => {
+            let msg_text = msg.content.message.msg;
+            this.cache(id, msg_text);
+            return Object(rxjs__WEBPACK_IMPORTED_MODULE_1__["from"])([msg_text]);
+        }));
+    }
+    retrieve_log_msg(id) {
+        let i = 0;
+        let obsv = this.msg_src.pipe(Object(rxjs_operators__WEBPACK_IMPORTED_MODULE_2__["filter"])(msg => {
+            let target_id = msg.content.message.uid + "_" +
+                msg.content.message.task;
+            return id == target_id;
+        }));
+        return obsv;
+    }
+    /**
+     * Reture:
+     *   True: Need to store into IndexedDB
+     *   False: No Need to store into IndexedDB
+     */
+    cache(tid, data) {
+        let exists = tid in this.log_cache;
+        if (!exists) {
+            this.log_cache[tid] = "";
+        }
+        // Cache update
+        this.log_cache[tid] = this.log_cache[tid] + data;
+        // Update log pos
+        this.log_pos[tid] += data.length;
+        // Persistent Store
+        if (this.log_cache[tid].length > this.cache_limit || data == "") {
+            if (this.log_cache[tid].length == 0) {
+                return;
+            }
+            // Cache length exceed cache limit need to store
+            // store into IndexedDB.
+            this.persistent_store(tid, data == "");
+            // Flush all cache
+            this.log_cache[tid] = "";
+        }
+    }
+    /**
+     * Store the cache that correspond to the tid
+     * into IndexedDB.
+     */
+    persistent_store(tid, isLast) {
+        if (tid in this.unstable_tasks) {
+            // The info of the task is in unstable
+            // state, if store data into it may break
+            // the correctness of the data.
+            return;
+        }
+        // WRAP cache into Blob
+        const cache = this.log_cache[tid];
+        const blob = new Blob([cache]);
+        // Store the Blob into IndexedDB
+        let db = this.access_db();
+        if (db == null) {
+            // Fail to access IndexedDB skip persistent_store.
+            return;
+        }
+        // Store blob with count as key.
+        let logInfo = {
+            'tid': tid,
+            'logBlobs': [blob],
+            'length': cache.length,
+            'fin': isLast
+        };
+        db.subscribe(db => {
+            let transaction = db.transaction([this.log_store_name], "readwrite");
+            let obStore = transaction.objectStore(this.log_store_name);
+            let request_current = obStore.openCursor(tid);
+            request_current.onsuccess = (event) => {
+                let cursor = request_current.result;
+                if (cursor) {
+                    // Store the last cache into database
+                    let current_data = cursor.value;
+                    current_data.logBlobs.push(blob);
+                    current_data.length += cache.length;
+                    current_data.fin = isLast;
+                    let request_update = obStore.put(current_data);
+                    request_update.onerror = (event) => {
+                        this.unstable_tasks.push(tid);
+                    };
+                }
+                else {
+                    // No info of the task is stored in database
+                    // create a new one.
+                    let request = obStore.add(logInfo);
+                    request.onerror = (event) => {
+                        // Mark the task which tid equal to parameter
+                        // as a unstable state to prevent break of
+                        // data within database.
+                        this.unstable_tasks.push(tid);
+                    };
+                }
+            };
+        });
+    }
+    mark_fin(uid, tid) {
+        this.set_fin_state(uid, tid, true);
+    }
+    set_fin_state(uid, tid, fin) {
+        tid = uid + "_" + tid;
+        if (tid in this.unstable_tasks) {
+            return;
+        }
+        let db = this.access_db();
+        if (db == null) {
+            return;
+        }
+        db.subscribe(db => {
+            let transaction = db.transaction([this.log_store_name], "readwrite");
+            let obStore = transaction.objectStore(this.log_store_name);
+            let request_current = obStore.get(tid);
+            request_current.onsuccess = (event) => {
+                let data = request_current.result;
+                data.fin = fin;
+                let put_request = obStore.put(data);
+                put_request.onerror = (event) => {
+                    this.unstable_tasks.push(tid);
+                };
+            };
+        });
+    }
+}
+TaskStateService.ɵfac = function TaskStateService_Factory(t) { return new (t || TaskStateService)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵinject"](_message_service__WEBPACK_IMPORTED_MODULE_4__["MessageService"])); };
+TaskStateService.ɵprov = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineInjectable"]({ token: TaskStateService, factory: TaskStateService.ɵfac, providedIn: 'root' });
+/*@__PURE__*/ (function () { _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵsetClassMetadata"](TaskStateService, [{
+        type: _angular_core__WEBPACK_IMPORTED_MODULE_0__["Injectable"],
+        args: [{
+                providedIn: 'root'
+            }]
+    }], function () { return [{ type: _message_service__WEBPACK_IMPORTED_MODULE_4__["MessageService"] }]; }, null); })();
+
+
+/***/ }),
+
 /***/ "AytR":
 /*!*****************************************!*\
   !*** ./src/environments/environment.ts ***!
@@ -115,17 +504,22 @@ const environment = {
 /*!********************************************************!*\
   !*** ./src/app/progress-bar/progress-bar.component.ts ***!
   \********************************************************/
-/*! exports provided: ProgressBarComponent */
+/*! exports provided: ProgressBarComponent, TaskLogDialog */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "ProgressBarComponent", function() { return ProgressBarComponent; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "TaskLogDialog", function() { return TaskLogDialog; });
 /* harmony import */ var _angular_core__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @angular/core */ "fXoL");
 /* harmony import */ var _message__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../message */ "oqF8");
 /* harmony import */ var _angular_material_table__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @angular/material/table */ "+0xr");
 /* harmony import */ var _message_service__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../message.service */ "OdHV");
-/* harmony import */ var _angular_common__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! @angular/common */ "ofXK");
+/* harmony import */ var _task_state_service__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../task-state.service */ "8R7l");
+/* harmony import */ var _angular_material_dialog__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! @angular/material/dialog */ "0IaG");
+/* harmony import */ var _angular_common__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! @angular/common */ "ofXK");
+
+
 
 
 
@@ -170,7 +564,9 @@ function ProgressBarComponent_table_1_th_8_Template(rf, ctx) { if (rf & 1) {
 } }
 const _c0 = function (a0) { return { "color": a0 }; };
 function ProgressBarComponent_table_1_td_9_p_2_Template(rf, ctx) { if (rf & 1) {
+    const _r16 = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵgetCurrentView"]();
     _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "p", 15);
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵlistener"]("click", function ProgressBarComponent_table_1_td_9_p_2_Template_p_click_0_listener() { _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵrestoreView"](_r16); const t_r13 = ctx.$implicit; const element_r11 = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵnextContext"]().$implicit; const ctx_r14 = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵnextContext"](2); return ctx_r14.get_task_message_log(element_r11.unique_id, t_r13.taskid); });
     _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtext"](1);
     _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
 } if (rf & 2) {
@@ -234,14 +630,16 @@ const JobInfors = [
     }
 ];
 class ProgressBarComponent {
-    constructor(msg_service) {
+    constructor(msg_service, tss, dialog) {
         this.msg_service = msg_service;
+        this.tss = tss;
+        this.dialog = dialog;
         this.notify_allow = false;
         this.jobs = {};
         this.jobSource = JobInfors;
         this.displayedColumns = ['uid', 'Name', 'Tasks'];
         this.dataSource = new _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatTableDataSource"]();
-        this.msg_service.register("job.msg").subscribe(msg => {
+        this.msg_service.register(msg => msg.type == "job.msg").subscribe(msg => {
             this.job_state_message_handle(msg);
         });
     }
@@ -250,7 +648,7 @@ class ProgressBarComponent {
          * Query current state from Master.
          */
         this.msg_service.sendMsg(new _message__WEBPACK_IMPORTED_MODULE_1__["QueryEvent"](["processing"]));
-        let subscribtion = this.msg_service.register("job.msg.batch")
+        let subscribtion = this.msg_service.register(msg => msg.type == "job.msg.batch")
             .subscribe(init_msg => {
             // Subtype of message must a batch
             if (init_msg.content.subtype != "batch") {
@@ -360,16 +758,25 @@ class ProgressBarComponent {
         let unique_id = content['jobs'][0];
         delete this.jobs[unique_id];
     }
+    get_task_message_log(uid, taskId) {
+        this.dialog.open(TaskLogDialog, { width: '30cm' });
+        this.tss.taskLogMessage(uid, taskId).subscribe(message => {
+            let log_dialog = document.getElementById("log_dialog");
+            let log_message = document.createElement("p");
+            log_message.appendChild(document.createTextNode(message));
+            log_dialog.appendChild(log_message);
+        });
+    }
 }
-ProgressBarComponent.ɵfac = function ProgressBarComponent_Factory(t) { return new (t || ProgressBarComponent)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_message_service__WEBPACK_IMPORTED_MODULE_3__["MessageService"])); };
-ProgressBarComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineComponent"]({ type: ProgressBarComponent, selectors: [["app-progress-bar"]], decls: 2, vars: 1, consts: [[1, "running-table-container"], ["mat-table", "", 3, "dataSource", 4, "ngIf"], ["mat-table", "", 3, "dataSource"], ["matColumnDef", "uid"], ["mat-header-cell", "", 4, "matHeaderCellDef"], ["mat-cell", "", 4, "matCellDef"], ["matColumnDef", "Name"], ["matColumnDef", "Tasks"], ["mat-header-row", "", 4, "matHeaderRowDef"], ["mat-row", "", 4, "matRowDef", "matRowDefColumns"], ["mat-header-cell", ""], ["mat-cell", ""], [1, "uid_field"], [1, "task-container"], ["class", "Task", 3, "ngStyle", 4, "ngFor", "ngForOf"], [1, "Task", 3, "ngStyle"], ["mat-header-row", ""], ["mat-row", ""]], template: function ProgressBarComponent_Template(rf, ctx) { if (rf & 1) {
+ProgressBarComponent.ɵfac = function ProgressBarComponent_Factory(t) { return new (t || ProgressBarComponent)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_message_service__WEBPACK_IMPORTED_MODULE_3__["MessageService"]), _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_task_state_service__WEBPACK_IMPORTED_MODULE_4__["TaskStateService"]), _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_angular_material_dialog__WEBPACK_IMPORTED_MODULE_5__["MatDialog"])); };
+ProgressBarComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineComponent"]({ type: ProgressBarComponent, selectors: [["app-progress-bar"]], decls: 2, vars: 1, consts: [[1, "running-table-container"], ["mat-table", "", 3, "dataSource", 4, "ngIf"], ["mat-table", "", 3, "dataSource"], ["matColumnDef", "uid"], ["mat-header-cell", "", 4, "matHeaderCellDef"], ["mat-cell", "", 4, "matCellDef"], ["matColumnDef", "Name"], ["matColumnDef", "Tasks"], ["mat-header-row", "", 4, "matHeaderRowDef"], ["mat-row", "", 4, "matRowDef", "matRowDefColumns"], ["mat-header-cell", ""], ["mat-cell", ""], [1, "uid_field"], [1, "task-container"], ["class", "Task", 3, "ngStyle", "click", 4, "ngFor", "ngForOf"], [1, "Task", 3, "ngStyle", "click"], ["mat-header-row", ""], ["mat-row", ""]], template: function ProgressBarComponent_Template(rf, ctx) { if (rf & 1) {
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "div", 0);
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtemplate"](1, ProgressBarComponent_table_1_Template, 12, 3, "table", 1);
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
     } if (rf & 2) {
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵadvance"](1);
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵproperty"]("ngIf", ctx.dataSource.data.length > 0);
-    } }, directives: [_angular_common__WEBPACK_IMPORTED_MODULE_4__["NgIf"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatTable"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatColumnDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatHeaderCellDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatCellDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatHeaderRowDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatRowDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatHeaderCell"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatCell"], _angular_common__WEBPACK_IMPORTED_MODULE_4__["NgForOf"], _angular_common__WEBPACK_IMPORTED_MODULE_4__["NgStyle"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatHeaderRow"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatRow"]], styles: [".task-container[_ngcontent-%COMP%] {\n    display: flex;\n}\n\n.running-table-container[_ngcontent-%COMP%] {\n    height: 250px;\n    width: 100%;\n    overflow: auto;\n}\n\n.Task[_ngcontent-%COMP%] {\n    padding: 0em 1em 0em 1em;\n    white-space: nowrap;\n    overflow: hidden;\n}\n\n.uid_field[_ngcontent-%COMP%] {\n    padding: 0em 1em 0em 0em;\n}\n/*# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbInNyYy9hcHAvcHJvZ3Jlc3MtYmFyL3Byb2dyZXNzLWJhci5jb21wb25lbnQuY3NzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBO0lBQ0ksYUFBYTtBQUNqQjs7QUFFQTtJQUNJLGFBQWE7SUFDYixXQUFXO0lBQ1gsY0FBYztBQUNsQjs7QUFFQTtJQUNJLHdCQUF3QjtJQUN4QixtQkFBbUI7SUFDbkIsZ0JBQWdCO0FBQ3BCOztBQUVBO0lBQ0ksd0JBQXdCO0FBQzVCIiwiZmlsZSI6InNyYy9hcHAvcHJvZ3Jlc3MtYmFyL3Byb2dyZXNzLWJhci5jb21wb25lbnQuY3NzIiwic291cmNlc0NvbnRlbnQiOlsiLnRhc2stY29udGFpbmVyIHtcbiAgICBkaXNwbGF5OiBmbGV4O1xufVxuXG4ucnVubmluZy10YWJsZS1jb250YWluZXIge1xuICAgIGhlaWdodDogMjUwcHg7XG4gICAgd2lkdGg6IDEwMCU7XG4gICAgb3ZlcmZsb3c6IGF1dG87XG59XG5cbi5UYXNrIHtcbiAgICBwYWRkaW5nOiAwZW0gMWVtIDBlbSAxZW07XG4gICAgd2hpdGUtc3BhY2U6IG5vd3JhcDtcbiAgICBvdmVyZmxvdzogaGlkZGVuO1xufVxuXG4udWlkX2ZpZWxkIHtcbiAgICBwYWRkaW5nOiAwZW0gMWVtIDBlbSAwZW07XG59XG4iXX0= */"] });
+    } }, directives: [_angular_common__WEBPACK_IMPORTED_MODULE_6__["NgIf"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatTable"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatColumnDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatHeaderCellDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatCellDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatHeaderRowDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatRowDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatHeaderCell"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatCell"], _angular_common__WEBPACK_IMPORTED_MODULE_6__["NgForOf"], _angular_common__WEBPACK_IMPORTED_MODULE_6__["NgStyle"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatHeaderRow"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatRow"]], styles: [".task-container[_ngcontent-%COMP%] {\n    display: flex;\n}\n\n.running-table-container[_ngcontent-%COMP%] {\n    height: 250px;\n    width: 100%;\n    overflow: auto;\n}\n\n.Task[_ngcontent-%COMP%] {\n    padding: 0em 1em 0em 1em;\n    white-space: nowrap;\n    overflow: hidden;\n}\n\n.uid_field[_ngcontent-%COMP%] {\n    padding: 0em 1em 0em 0em;\n}\n/*# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbInNyYy9hcHAvcHJvZ3Jlc3MtYmFyL3Byb2dyZXNzLWJhci5jb21wb25lbnQuY3NzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBO0lBQ0ksYUFBYTtBQUNqQjs7QUFFQTtJQUNJLGFBQWE7SUFDYixXQUFXO0lBQ1gsY0FBYztBQUNsQjs7QUFFQTtJQUNJLHdCQUF3QjtJQUN4QixtQkFBbUI7SUFDbkIsZ0JBQWdCO0FBQ3BCOztBQUVBO0lBQ0ksd0JBQXdCO0FBQzVCIiwiZmlsZSI6InNyYy9hcHAvcHJvZ3Jlc3MtYmFyL3Byb2dyZXNzLWJhci5jb21wb25lbnQuY3NzIiwic291cmNlc0NvbnRlbnQiOlsiLnRhc2stY29udGFpbmVyIHtcbiAgICBkaXNwbGF5OiBmbGV4O1xufVxuXG4ucnVubmluZy10YWJsZS1jb250YWluZXIge1xuICAgIGhlaWdodDogMjUwcHg7XG4gICAgd2lkdGg6IDEwMCU7XG4gICAgb3ZlcmZsb3c6IGF1dG87XG59XG5cbi5UYXNrIHtcbiAgICBwYWRkaW5nOiAwZW0gMWVtIDBlbSAxZW07XG4gICAgd2hpdGUtc3BhY2U6IG5vd3JhcDtcbiAgICBvdmVyZmxvdzogaGlkZGVuO1xufVxuXG4udWlkX2ZpZWxkIHtcbiAgICBwYWRkaW5nOiAwZW0gMWVtIDBlbSAwZW07XG59XG4iXX0= */"] });
 /*@__PURE__*/ (function () { _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵsetClassMetadata"](ProgressBarComponent, [{
         type: _angular_core__WEBPACK_IMPORTED_MODULE_0__["Component"],
         args: [{
@@ -377,7 +784,34 @@ ProgressBarComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdef
                 templateUrl: './progress-bar.component.html',
                 styleUrls: ['./progress-bar.component.css']
             }]
-    }], function () { return [{ type: _message_service__WEBPACK_IMPORTED_MODULE_3__["MessageService"] }]; }, null); })();
+    }], function () { return [{ type: _message_service__WEBPACK_IMPORTED_MODULE_3__["MessageService"] }, { type: _task_state_service__WEBPACK_IMPORTED_MODULE_4__["TaskStateService"] }, { type: _angular_material_dialog__WEBPACK_IMPORTED_MODULE_5__["MatDialog"] }]; }, null); })();
+class TaskLogDialog {
+    constructor(dialogRef) {
+        this.dialogRef = dialogRef;
+    }
+    onCancel() {
+        this.dialogRef.close();
+    }
+}
+TaskLogDialog.ɵfac = function TaskLogDialog_Factory(t) { return new (t || TaskLogDialog)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_angular_material_dialog__WEBPACK_IMPORTED_MODULE_5__["MatDialogRef"])); };
+TaskLogDialog.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineComponent"]({ type: TaskLogDialog, selectors: [["task-log-dialog"]], decls: 6, vars: 0, consts: [["mat-dialog-title", ""], ["mat-dialog-content", "", "id", "log_dialog"], ["mat-dialog-actions", ""], ["mat-button", ""]], template: function TaskLogDialog_Template(rf, ctx) { if (rf & 1) {
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "h1", 0);
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtext"](1, "Log Message");
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelement"](2, "div", 1);
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](3, "div", 2);
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](4, "button", 3);
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtext"](5, "Downloads");
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
+    } }, encapsulation: 2 });
+/*@__PURE__*/ (function () { _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵsetClassMetadata"](TaskLogDialog, [{
+        type: _angular_core__WEBPACK_IMPORTED_MODULE_0__["Component"],
+        args: [{
+                selector: 'task-log-dialog',
+                templateUrl: 'task_log_msg_dialog.html'
+            }]
+    }], function () { return [{ type: _angular_material_dialog__WEBPACK_IMPORTED_MODULE_5__["MatDialogRef"] }]; }, null); })();
 
 
 /***/ }),
@@ -451,103 +885,33 @@ VersionService.ɵprov = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineIn
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "MessageService", function() { return MessageService; });
 /* harmony import */ var _angular_core__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @angular/core */ "fXoL");
-/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! rxjs */ "qCKp");
-/* harmony import */ var _message__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./message */ "oqF8");
-/* harmony import */ var _channel_service__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./channel.service */ "R+oW");
+/* harmony import */ var rxjs_operators__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! rxjs/operators */ "kU1M");
+/* harmony import */ var _channel_service__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./channel.service */ "R+oW");
 
 
 
 
-
-class MessageQueue {
-    constructor() {
-        this.data = [];
-    }
-    len() {
-        return this.data.length;
-    }
-    isFull() {
-        return this.len() > 0;
-    }
-    isEmpty() {
-        return this.len() == 0;
-    }
-    push(msg) {
-        this.data.push(msg);
-    }
-    pop() {
-        return this.data.pop();
-    }
-    shift() {
-        return this.data.shift();
-    }
-}
 class MessageService {
     constructor(channelService) {
         this.channelService = channelService;
         this.sock_url = "/commu/";
-        /**
-         * With Help of msg_queues MessageService able to
-         * provide messages that from server, to another
-         * components or services.
-         *
-         *  ---- message ---> MessageService ---> queue ---> component
-         */
-        this.msg_queues = {};
         this.channel = this.channelService.create("ws://" + location.host + this.sock_url);
-        this.channel.subscribe({
-            next: msg => {
-                if (Object(_message__WEBPACK_IMPORTED_MODULE_2__["message_check"])(msg) === false) {
-                    // invalid message
-                    return;
-                }
-                let message = {
-                    "type": msg["type"],
-                    "content": msg["content"]
-                };
-                let msg_type = message.type;
-                // If type of thie message is subscribe then add it to
-                // correspond queue.
-                if (typeof this.msg_queues[msg_type] != 'undefined') {
-                    this.msg_queues[message.type].push(message);
-                }
-            },
-            error: err => {
-                console.log(err);
-            },
-            complete: () => {
-                console.log("complete");
-            }
-        });
     }
-    register(msg_type) {
-        // To check that is this msg_type is unique.
-        if (typeof this.msg_queues[msg_type] == "undefined") {
-            this.msg_queues[msg_type] = new MessageQueue();
-        }
-        else
-            return null;
-        return new rxjs__WEBPACK_IMPORTED_MODULE_1__["Observable"](msg_receiver => {
-            setInterval(() => {
-                let q = this.msg_queues[msg_type];
-                while (!q.isEmpty()) {
-                    msg_receiver.next(q.shift());
-                }
-            }, 1000);
-        });
+    register(checker) {
+        return this.channel.pipe(Object(rxjs_operators__WEBPACK_IMPORTED_MODULE_1__["filter"])(msg => checker(msg)));
     }
     sendMsg(msg) {
-        this.channel.sendMsg(msg);
+        this.channel.next(msg);
     }
 }
-MessageService.ɵfac = function MessageService_Factory(t) { return new (t || MessageService)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵinject"](_channel_service__WEBPACK_IMPORTED_MODULE_3__["ChannelService"])); };
+MessageService.ɵfac = function MessageService_Factory(t) { return new (t || MessageService)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵinject"](_channel_service__WEBPACK_IMPORTED_MODULE_2__["ChannelService"])); };
 MessageService.ɵprov = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineInjectable"]({ token: MessageService, factory: MessageService.ɵfac, providedIn: 'root' });
 /*@__PURE__*/ (function () { _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵsetClassMetadata"](MessageService, [{
         type: _angular_core__WEBPACK_IMPORTED_MODULE_0__["Injectable"],
         args: [{
                 providedIn: 'root'
             }]
-    }], function () { return [{ type: _channel_service__WEBPACK_IMPORTED_MODULE_3__["ChannelService"] }]; }, null); })();
+    }], function () { return [{ type: _channel_service__WEBPACK_IMPORTED_MODULE_2__["ChannelService"] }]; }, null); })();
 
 
 /***/ }),
@@ -563,9 +927,7 @@ MessageService.ɵprov = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineIn
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "ChannelService", function() { return ChannelService; });
 /* harmony import */ var _angular_core__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @angular/core */ "fXoL");
-/* harmony import */ var rxjs_webSocket__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! rxjs/webSocket */ "3uOa");
-/* harmony import */ var _channel__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./channel */ "4La/");
-
+/* harmony import */ var _channel__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./channel */ "4La/");
 
 
 
@@ -574,20 +936,19 @@ class ChannelService {
         this.channels = {};
     }
     create(url) {
-        let socket;
-        if (typeof this.channels[url] == 'undefined') {
+        let channel = new _channel__WEBPACK_IMPORTED_MODULE_1__["Channel"](url);
+        if (this.channels[url] == undefined) {
             // New channel
-            socket = Object(rxjs_webSocket__WEBPACK_IMPORTED_MODULE_1__["webSocket"])(url);
-            this.channels[url] = socket;
+            this.channels[url] = channel;
         }
         else {
             // Exist channel
-            socket = this.channels[url];
+            return this.channels[url];
         }
-        return new _channel__WEBPACK_IMPORTED_MODULE_2__["Channel"](socket);
+        return channel;
     }
     close(url) {
-        if (typeof this.channels[url] != 'undefined') {
+        if (this.channels[url] != undefined) {
             this.channels[url].complete();
         }
     }
@@ -1254,17 +1615,22 @@ function message_check(msg) {
 /*!******************************************************!*\
   !*** ./src/app/job-history/job-history.component.ts ***!
   \******************************************************/
-/*! exports provided: JobHistoryComponent */
+/*! exports provided: JobHistoryComponent, TaskLogDialog */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "JobHistoryComponent", function() { return JobHistoryComponent; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "TaskLogDialog", function() { return TaskLogDialog; });
 /* harmony import */ var _angular_core__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @angular/core */ "fXoL");
 /* harmony import */ var _message__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../message */ "oqF8");
 /* harmony import */ var _angular_material_table__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @angular/material/table */ "+0xr");
 /* harmony import */ var _message_service__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../message.service */ "OdHV");
-/* harmony import */ var _angular_common__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! @angular/common */ "ofXK");
+/* harmony import */ var _task_state_service__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../task-state.service */ "8R7l");
+/* harmony import */ var _angular_material_dialog__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! @angular/material/dialog */ "0IaG");
+/* harmony import */ var _angular_common__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! @angular/common */ "ofXK");
+
+
 
 
 
@@ -1309,7 +1675,9 @@ function JobHistoryComponent_table_1_th_8_Template(rf, ctx) { if (rf & 1) {
 } }
 const _c0 = function (a0) { return { "color": a0 }; };
 function JobHistoryComponent_table_1_td_9_p_2_Template(rf, ctx) { if (rf & 1) {
+    const _r16 = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵgetCurrentView"]();
     _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "p", 15);
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵlistener"]("click", function JobHistoryComponent_table_1_td_9_p_2_Template_p_click_0_listener() { _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵrestoreView"](_r16); const t_r13 = ctx.$implicit; const element_r11 = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵnextContext"]().$implicit; const ctx_r14 = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵnextContext"](2); return ctx_r14.get_task_log_messages(element_r11.unique_id, t_r13.taskid); });
     _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtext"](1);
     _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
 } if (rf & 2) {
@@ -1363,12 +1731,15 @@ function JobHistoryComponent_table_1_Template(rf, ctx) { if (rf & 1) {
     _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵproperty"]("matRowDefColumns", ctx_r0.displayedColumns);
 } }
 class JobHistoryComponent {
-    constructor(msg_service) {
+    constructor(msg_service, tss, dialog) {
         this.msg_service = msg_service;
+        this.tss = tss;
+        this.dialog = dialog;
         this.history = [];
         this.displayedColumns = ['uid', 'Name', 'Tasks'];
         this.dataSource = new _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatTableDataSource"]([]);
-        this.msg_service.register("job.msg.history").subscribe(history_msg => {
+        this.msg_service.register(msg => msg.type == "job.msg.history")
+            .subscribe(history_msg => {
             this.history_msg_handle(history_msg);
         });
     }
@@ -1402,16 +1773,25 @@ class JobHistoryComponent {
     is_task_fail(task) {
         return task.state == "FAIL";
     }
+    get_task_log_messages(uid, taskId) {
+        this.dialog.open(TaskLogDialog, { width: '30cm' });
+        this.tss.taskLogMessage(uid, taskId).subscribe(message => {
+            let log_dialog = document.getElementById("log_dialog");
+            let log_message = document.createElement("p");
+            log_message.appendChild(document.createTextNode(message));
+            log_dialog.appendChild(log_message);
+        });
+    }
 }
-JobHistoryComponent.ɵfac = function JobHistoryComponent_Factory(t) { return new (t || JobHistoryComponent)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_message_service__WEBPACK_IMPORTED_MODULE_3__["MessageService"])); };
-JobHistoryComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineComponent"]({ type: JobHistoryComponent, selectors: [["app-job-history"]], decls: 2, vars: 1, consts: [[1, "history-table-container"], ["mat-table", "", 3, "dataSource", 4, "ngIf"], ["mat-table", "", 3, "dataSource"], ["matColumnDef", "uid"], ["mat-header-cell", "", 4, "matHeaderCellDef"], ["mat-cell", "", 4, "matCellDef"], ["matColumnDef", "Name"], ["matColumnDef", "Tasks"], ["mat-header-row", "", 4, "matHeaderRowDef"], ["mat-row", "", 4, "matRowDef", "matRowDefColumns"], ["mat-header-cell", ""], ["mat-cell", ""], [1, "uid_field"], [1, "task-container"], ["class", "Task", 3, "ngStyle", 4, "ngFor", "ngForOf"], [1, "Task", 3, "ngStyle"], ["mat-header-row", ""], ["mat-row", ""]], template: function JobHistoryComponent_Template(rf, ctx) { if (rf & 1) {
+JobHistoryComponent.ɵfac = function JobHistoryComponent_Factory(t) { return new (t || JobHistoryComponent)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_message_service__WEBPACK_IMPORTED_MODULE_3__["MessageService"]), _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_task_state_service__WEBPACK_IMPORTED_MODULE_4__["TaskStateService"]), _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_angular_material_dialog__WEBPACK_IMPORTED_MODULE_5__["MatDialog"])); };
+JobHistoryComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineComponent"]({ type: JobHistoryComponent, selectors: [["app-job-history"]], decls: 2, vars: 1, consts: [[1, "history-table-container"], ["mat-table", "", 3, "dataSource", 4, "ngIf"], ["mat-table", "", 3, "dataSource"], ["matColumnDef", "uid"], ["mat-header-cell", "", 4, "matHeaderCellDef"], ["mat-cell", "", 4, "matCellDef"], ["matColumnDef", "Name"], ["matColumnDef", "Tasks"], ["mat-header-row", "", 4, "matHeaderRowDef"], ["mat-row", "", 4, "matRowDef", "matRowDefColumns"], ["mat-header-cell", ""], ["mat-cell", ""], [1, "uid_field"], [1, "task-container"], ["class", "Task", 3, "ngStyle", "click", 4, "ngFor", "ngForOf"], [1, "Task", 3, "ngStyle", "click"], ["mat-header-row", ""], ["mat-row", ""]], template: function JobHistoryComponent_Template(rf, ctx) { if (rf & 1) {
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "div", 0);
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtemplate"](1, JobHistoryComponent_table_1_Template, 12, 3, "table", 1);
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
     } if (rf & 2) {
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵadvance"](1);
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵproperty"]("ngIf", ctx.dataSource.data.length > 0);
-    } }, directives: [_angular_common__WEBPACK_IMPORTED_MODULE_4__["NgIf"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatTable"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatColumnDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatHeaderCellDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatCellDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatHeaderRowDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatRowDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatHeaderCell"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatCell"], _angular_common__WEBPACK_IMPORTED_MODULE_4__["NgForOf"], _angular_common__WEBPACK_IMPORTED_MODULE_4__["NgStyle"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatHeaderRow"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatRow"]], styles: [".task-container[_ngcontent-%COMP%] {\n    display: flex;\n}\n\n.history-table-container[_ngcontent-%COMP%] {\n    height: 250px;\n    width: 100%;\n    overflow: auto;\n}\n\n.Task[_ngcontent-%COMP%] {\n    padding: 0em 1em 0em 1em;\n    white-space: nowrap;\n    overflow: hidden;\n}\n\n.uid_field[_ngcontent-%COMP%] {\n    padding: 0em 1em 0em 0em;\n}\n/*# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbInNyYy9hcHAvam9iLWhpc3Rvcnkvam9iLWhpc3RvcnkuY29tcG9uZW50LmNzcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQTtJQUNJLGFBQWE7QUFDakI7O0FBRUE7SUFDSSxhQUFhO0lBQ2IsV0FBVztJQUNYLGNBQWM7QUFDbEI7O0FBRUE7SUFDSSx3QkFBd0I7SUFDeEIsbUJBQW1CO0lBQ25CLGdCQUFnQjtBQUNwQjs7QUFFQTtJQUNJLHdCQUF3QjtBQUM1QiIsImZpbGUiOiJzcmMvYXBwL2pvYi1oaXN0b3J5L2pvYi1oaXN0b3J5LmNvbXBvbmVudC5jc3MiLCJzb3VyY2VzQ29udGVudCI6WyIudGFzay1jb250YWluZXIge1xuICAgIGRpc3BsYXk6IGZsZXg7XG59XG5cbi5oaXN0b3J5LXRhYmxlLWNvbnRhaW5lciB7XG4gICAgaGVpZ2h0OiAyNTBweDtcbiAgICB3aWR0aDogMTAwJTtcbiAgICBvdmVyZmxvdzogYXV0bztcbn1cblxuLlRhc2sge1xuICAgIHBhZGRpbmc6IDBlbSAxZW0gMGVtIDFlbTtcbiAgICB3aGl0ZS1zcGFjZTogbm93cmFwO1xuICAgIG92ZXJmbG93OiBoaWRkZW47XG59XG5cbi51aWRfZmllbGQge1xuICAgIHBhZGRpbmc6IDBlbSAxZW0gMGVtIDBlbTtcbn1cbiJdfQ== */"] });
+    } }, directives: [_angular_common__WEBPACK_IMPORTED_MODULE_6__["NgIf"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatTable"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatColumnDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatHeaderCellDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatCellDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatHeaderRowDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatRowDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatHeaderCell"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatCell"], _angular_common__WEBPACK_IMPORTED_MODULE_6__["NgForOf"], _angular_common__WEBPACK_IMPORTED_MODULE_6__["NgStyle"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatHeaderRow"], _angular_material_table__WEBPACK_IMPORTED_MODULE_2__["MatRow"]], styles: [".task-container[_ngcontent-%COMP%] {\n    display: flex;\n}\n\n.history-table-container[_ngcontent-%COMP%] {\n    height: 250px;\n    width: 100%;\n    overflow: auto;\n}\n\n.Task[_ngcontent-%COMP%] {\n    padding: 0em 1em 0em 1em;\n    white-space: nowrap;\n    overflow: hidden;\n}\n\n.uid_field[_ngcontent-%COMP%] {\n    padding: 0em 1em 0em 0em;\n}\n/*# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbInNyYy9hcHAvam9iLWhpc3Rvcnkvam9iLWhpc3RvcnkuY29tcG9uZW50LmNzcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQTtJQUNJLGFBQWE7QUFDakI7O0FBRUE7SUFDSSxhQUFhO0lBQ2IsV0FBVztJQUNYLGNBQWM7QUFDbEI7O0FBRUE7SUFDSSx3QkFBd0I7SUFDeEIsbUJBQW1CO0lBQ25CLGdCQUFnQjtBQUNwQjs7QUFFQTtJQUNJLHdCQUF3QjtBQUM1QiIsImZpbGUiOiJzcmMvYXBwL2pvYi1oaXN0b3J5L2pvYi1oaXN0b3J5LmNvbXBvbmVudC5jc3MiLCJzb3VyY2VzQ29udGVudCI6WyIudGFzay1jb250YWluZXIge1xuICAgIGRpc3BsYXk6IGZsZXg7XG59XG5cbi5oaXN0b3J5LXRhYmxlLWNvbnRhaW5lciB7XG4gICAgaGVpZ2h0OiAyNTBweDtcbiAgICB3aWR0aDogMTAwJTtcbiAgICBvdmVyZmxvdzogYXV0bztcbn1cblxuLlRhc2sge1xuICAgIHBhZGRpbmc6IDBlbSAxZW0gMGVtIDFlbTtcbiAgICB3aGl0ZS1zcGFjZTogbm93cmFwO1xuICAgIG92ZXJmbG93OiBoaWRkZW47XG59XG5cbi51aWRfZmllbGQge1xuICAgIHBhZGRpbmc6IDBlbSAxZW0gMGVtIDBlbTtcbn1cbiJdfQ== */"] });
 /*@__PURE__*/ (function () { _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵsetClassMetadata"](JobHistoryComponent, [{
         type: _angular_core__WEBPACK_IMPORTED_MODULE_0__["Component"],
         args: [{
@@ -1419,7 +1799,34 @@ JobHistoryComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefi
                 templateUrl: './job-history.component.html',
                 styleUrls: ['./job-history.component.css']
             }]
-    }], function () { return [{ type: _message_service__WEBPACK_IMPORTED_MODULE_3__["MessageService"] }]; }, null); })();
+    }], function () { return [{ type: _message_service__WEBPACK_IMPORTED_MODULE_3__["MessageService"] }, { type: _task_state_service__WEBPACK_IMPORTED_MODULE_4__["TaskStateService"] }, { type: _angular_material_dialog__WEBPACK_IMPORTED_MODULE_5__["MatDialog"] }]; }, null); })();
+class TaskLogDialog {
+    constructor(dialogRef) {
+        this.dialogRef = dialogRef;
+    }
+    onCancel() {
+        this.dialogRef.close();
+    }
+}
+TaskLogDialog.ɵfac = function TaskLogDialog_Factory(t) { return new (t || TaskLogDialog)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_angular_material_dialog__WEBPACK_IMPORTED_MODULE_5__["MatDialogRef"])); };
+TaskLogDialog.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineComponent"]({ type: TaskLogDialog, selectors: [["task-log-dialog"]], decls: 6, vars: 0, consts: [["mat-dialog-title", ""], ["mat-dialog-content", "", "id", "log_dialog"], ["mat-dialog-actions", ""], ["mat-button", ""]], template: function TaskLogDialog_Template(rf, ctx) { if (rf & 1) {
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "h1", 0);
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtext"](1, "Log Message");
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelement"](2, "div", 1);
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](3, "div", 2);
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](4, "button", 3);
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtext"](5, "Downloads");
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
+    } }, encapsulation: 2 });
+/*@__PURE__*/ (function () { _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵsetClassMetadata"](TaskLogDialog, [{
+        type: _angular_core__WEBPACK_IMPORTED_MODULE_0__["Component"],
+        args: [{
+                selector: 'task-log-dialog',
+                templateUrl: 'task_log_msg_dialog.html'
+            }]
+    }], function () { return [{ type: _angular_material_dialog__WEBPACK_IMPORTED_MODULE_5__["MatDialogRef"] }]; }, null); })();
 
 
 /***/ }),
@@ -1439,11 +1846,12 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _version_service__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../version.service */ "JT0H");
 /* harmony import */ var _revision_service__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../revision.service */ "4TEL");
 /* harmony import */ var _angular_material_dialog__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! @angular/material/dialog */ "0IaG");
-/* harmony import */ var _angular_material_table__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! @angular/material/table */ "+0xr");
-/* harmony import */ var _angular_material_button__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! @angular/material/button */ "bTqV");
-/* harmony import */ var _angular_material_form_field__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! @angular/material/form-field */ "kmnG");
-/* harmony import */ var _angular_material_input__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! @angular/material/input */ "qFsG");
-/* harmony import */ var _angular_forms__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! @angular/forms */ "3Pt+");
+/* harmony import */ var _angular_common__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! @angular/common */ "ofXK");
+/* harmony import */ var _angular_material_table__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! @angular/material/table */ "+0xr");
+/* harmony import */ var _angular_material_button__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! @angular/material/button */ "bTqV");
+/* harmony import */ var _angular_material_form_field__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! @angular/material/form-field */ "kmnG");
+/* harmony import */ var _angular_material_input__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! @angular/material/input */ "qFsG");
+/* harmony import */ var _angular_forms__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! @angular/forms */ "3Pt+");
 
 
 
@@ -1454,39 +1862,61 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
-function VerRegisterComponent_th_3_Template(rf, ctx) { if (rf & 1) {
-    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "th", 8);
+
+function VerRegisterComponent_table_1_th_2_Template(rf, ctx) { if (rf & 1) {
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "th", 9);
     _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtext"](1, " Comment ");
     _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
 } }
-function VerRegisterComponent_td_4_Template(rf, ctx) { if (rf & 1) {
-    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "td", 9);
+function VerRegisterComponent_table_1_td_3_Template(rf, ctx) { if (rf & 1) {
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "td", 10);
     _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtext"](1);
     _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
 } if (rf & 2) {
-    const element_r6 = ctx.$implicit;
+    const element_r7 = ctx.$implicit;
     _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵadvance"](1);
-    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtextInterpolate1"](" ", element_r6.comment, " ");
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtextInterpolate1"](" ", element_r7.comment, " ");
 } }
-function VerRegisterComponent_th_6_Template(rf, ctx) { if (rf & 1) {
-    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "th", 8);
+function VerRegisterComponent_table_1_th_5_Template(rf, ctx) { if (rf & 1) {
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "th", 9);
     _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtext"](1, " Register ");
     _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
 } }
-function VerRegisterComponent_td_7_Template(rf, ctx) { if (rf & 1) {
-    const _r9 = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵgetCurrentView"]();
-    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "td", 9);
-    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](1, "button", 10);
-    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵlistener"]("click", function VerRegisterComponent_td_7_Template_button_click_1_listener() { _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵrestoreView"](_r9); const element_r7 = ctx.$implicit; const ctx_r8 = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵnextContext"](); return ctx_r8.register(element_r7.sn); });
+function VerRegisterComponent_table_1_td_6_Template(rf, ctx) { if (rf & 1) {
+    const _r10 = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵgetCurrentView"]();
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "td", 10);
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](1, "button", 11);
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵlistener"]("click", function VerRegisterComponent_table_1_td_6_Template_button_click_1_listener() { _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵrestoreView"](_r10); const element_r8 = ctx.$implicit; const ctx_r9 = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵnextContext"](2); return ctx_r9.register(element_r8.sn); });
     _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtext"](2, " Register ");
     _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
     _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
 } }
-function VerRegisterComponent_tr_8_Template(rf, ctx) { if (rf & 1) {
-    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelement"](0, "tr", 11);
-} }
-function VerRegisterComponent_tr_9_Template(rf, ctx) { if (rf & 1) {
+function VerRegisterComponent_table_1_tr_7_Template(rf, ctx) { if (rf & 1) {
     _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelement"](0, "tr", 12);
+} }
+function VerRegisterComponent_table_1_tr_8_Template(rf, ctx) { if (rf & 1) {
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelement"](0, "tr", 13);
+} }
+function VerRegisterComponent_table_1_Template(rf, ctx) { if (rf & 1) {
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "table", 2);
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementContainerStart"](1, 3);
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtemplate"](2, VerRegisterComponent_table_1_th_2_Template, 2, 0, "th", 4);
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtemplate"](3, VerRegisterComponent_table_1_td_3_Template, 2, 1, "td", 5);
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementContainerEnd"]();
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementContainerStart"](4, 6);
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtemplate"](5, VerRegisterComponent_table_1_th_5_Template, 2, 0, "th", 4);
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtemplate"](6, VerRegisterComponent_table_1_td_6_Template, 3, 0, "td", 5);
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementContainerEnd"]();
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtemplate"](7, VerRegisterComponent_table_1_tr_7_Template, 1, 0, "tr", 7);
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtemplate"](8, VerRegisterComponent_table_1_tr_8_Template, 1, 0, "tr", 8);
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
+} if (rf & 2) {
+    const ctx_r0 = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵnextContext"]();
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵproperty"]("dataSource", ctx_r0.revisions);
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵadvance"](7);
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵproperty"]("matHeaderRowDef", ctx_r0.displayedColumns);
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵadvance"](1);
+    _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵproperty"]("matRowDefColumns", ctx_r0.displayedColumns);
 } }
 class VerRegisterComponent {
     constructor(verService, revService, dialog) {
@@ -1547,30 +1977,15 @@ class VerRegisterComponent {
     }
 }
 VerRegisterComponent.ɵfac = function VerRegisterComponent_Factory(t) { return new (t || VerRegisterComponent)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_version_service__WEBPACK_IMPORTED_MODULE_1__["VersionService"]), _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_revision_service__WEBPACK_IMPORTED_MODULE_2__["RevisionService"]), _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_angular_material_dialog__WEBPACK_IMPORTED_MODULE_3__["MatDialog"])); };
-VerRegisterComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineComponent"]({ type: VerRegisterComponent, selectors: [["app-ver-register"]], decls: 10, vars: 3, consts: [[1, "table-container", 3, "scroll"], ["mat-table", "", 3, "dataSource"], ["matColumnDef", "Comment"], ["mat-header-cell", "", 4, "matHeaderCellDef"], ["mat-cell", "", 4, "matCellDef"], ["matColumnDef", "Register"], ["mat-header-row", "", 4, "matHeaderRowDef"], ["mat-row", "", 4, "matRowDef", "matRowDefColumns"], ["mat-header-cell", ""], ["mat-cell", ""], ["mat-flat-button", "", "color", "primary", 3, "click"], ["mat-header-row", ""], ["mat-row", ""]], template: function VerRegisterComponent_Template(rf, ctx) { if (rf & 1) {
+VerRegisterComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineComponent"]({ type: VerRegisterComponent, selectors: [["app-ver-register"]], decls: 2, vars: 1, consts: [[1, "table-container", 3, "scroll"], ["mat-table", "", 3, "dataSource", 4, "ngIf"], ["mat-table", "", 3, "dataSource"], ["matColumnDef", "Comment"], ["mat-header-cell", "", 4, "matHeaderCellDef"], ["mat-cell", "", 4, "matCellDef"], ["matColumnDef", "Register"], ["mat-header-row", "", 4, "matHeaderRowDef"], ["mat-row", "", 4, "matRowDef", "matRowDefColumns"], ["mat-header-cell", ""], ["mat-cell", ""], ["mat-flat-button", "", "color", "primary", 3, "click"], ["mat-header-row", ""], ["mat-row", ""]], template: function VerRegisterComponent_Template(rf, ctx) { if (rf & 1) {
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "div", 0);
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵlistener"]("scroll", function VerRegisterComponent_Template_div_scroll_0_listener($event) { return ctx.onScroll($event); });
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](1, "table", 1);
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementContainerStart"](2, 2);
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtemplate"](3, VerRegisterComponent_th_3_Template, 2, 0, "th", 3);
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtemplate"](4, VerRegisterComponent_td_4_Template, 2, 1, "td", 4);
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementContainerEnd"]();
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementContainerStart"](5, 5);
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtemplate"](6, VerRegisterComponent_th_6_Template, 2, 0, "th", 3);
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtemplate"](7, VerRegisterComponent_td_7_Template, 3, 0, "td", 4);
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementContainerEnd"]();
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtemplate"](8, VerRegisterComponent_tr_8_Template, 1, 0, "tr", 6);
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtemplate"](9, VerRegisterComponent_tr_9_Template, 1, 0, "tr", 7);
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtemplate"](1, VerRegisterComponent_table_1_Template, 9, 3, "table", 1);
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
     } if (rf & 2) {
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵadvance"](1);
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵproperty"]("dataSource", ctx.revisions);
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵadvance"](7);
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵproperty"]("matHeaderRowDef", ctx.displayedColumns);
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵadvance"](1);
-        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵproperty"]("matRowDefColumns", ctx.displayedColumns);
-    } }, directives: [_angular_material_table__WEBPACK_IMPORTED_MODULE_4__["MatTable"], _angular_material_table__WEBPACK_IMPORTED_MODULE_4__["MatColumnDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_4__["MatHeaderCellDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_4__["MatCellDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_4__["MatHeaderRowDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_4__["MatRowDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_4__["MatHeaderCell"], _angular_material_table__WEBPACK_IMPORTED_MODULE_4__["MatCell"], _angular_material_button__WEBPACK_IMPORTED_MODULE_5__["MatButton"], _angular_material_table__WEBPACK_IMPORTED_MODULE_4__["MatHeaderRow"], _angular_material_table__WEBPACK_IMPORTED_MODULE_4__["MatRow"]], styles: [".table-container[_ngcontent-%COMP%] {\n    height: 600px;\n    overflow: auto;\n}\n/*# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbInNyYy9hcHAvdmVyLXJlZ2lzdGVyL3Zlci1yZWdpc3Rlci5jb21wb25lbnQuY3NzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBO0lBQ0ksYUFBYTtJQUNiLGNBQWM7QUFDbEIiLCJmaWxlIjoic3JjL2FwcC92ZXItcmVnaXN0ZXIvdmVyLXJlZ2lzdGVyLmNvbXBvbmVudC5jc3MiLCJzb3VyY2VzQ29udGVudCI6WyIudGFibGUtY29udGFpbmVyIHtcbiAgICBoZWlnaHQ6IDYwMHB4O1xuICAgIG92ZXJmbG93OiBhdXRvO1xufVxuIl19 */"] });
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵproperty"]("ngIf", ctx.revisions.length > 0);
+    } }, directives: [_angular_common__WEBPACK_IMPORTED_MODULE_4__["NgIf"], _angular_material_table__WEBPACK_IMPORTED_MODULE_5__["MatTable"], _angular_material_table__WEBPACK_IMPORTED_MODULE_5__["MatColumnDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_5__["MatHeaderCellDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_5__["MatCellDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_5__["MatHeaderRowDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_5__["MatRowDef"], _angular_material_table__WEBPACK_IMPORTED_MODULE_5__["MatHeaderCell"], _angular_material_table__WEBPACK_IMPORTED_MODULE_5__["MatCell"], _angular_material_button__WEBPACK_IMPORTED_MODULE_6__["MatButton"], _angular_material_table__WEBPACK_IMPORTED_MODULE_5__["MatHeaderRow"], _angular_material_table__WEBPACK_IMPORTED_MODULE_5__["MatRow"]], styles: [".table-container[_ngcontent-%COMP%] {\n    height: 600px;\n    overflow: auto;\n}\n/*# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbInNyYy9hcHAvdmVyLXJlZ2lzdGVyL3Zlci1yZWdpc3Rlci5jb21wb25lbnQuY3NzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBO0lBQ0ksYUFBYTtJQUNiLGNBQWM7QUFDbEIiLCJmaWxlIjoic3JjL2FwcC92ZXItcmVnaXN0ZXIvdmVyLXJlZ2lzdGVyLmNvbXBvbmVudC5jc3MiLCJzb3VyY2VzQ29udGVudCI6WyIudGFibGUtY29udGFpbmVyIHtcbiAgICBoZWlnaHQ6IDYwMHB4O1xuICAgIG92ZXJmbG93OiBhdXRvO1xufVxuIl19 */"] });
 /*@__PURE__*/ (function () { _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵsetClassMetadata"](VerRegisterComponent, [{
         type: _angular_core__WEBPACK_IMPORTED_MODULE_0__["Component"],
         args: [{
@@ -1616,7 +2031,7 @@ RegisterDialog.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineCom
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵproperty"]("ngModel", ctx.version);
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵadvance"](4);
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵproperty"]("mat-dialog-close", ctx.version);
-    } }, directives: [_angular_material_dialog__WEBPACK_IMPORTED_MODULE_3__["MatDialogTitle"], _angular_material_dialog__WEBPACK_IMPORTED_MODULE_3__["MatDialogContent"], _angular_material_form_field__WEBPACK_IMPORTED_MODULE_6__["MatFormField"], _angular_material_input__WEBPACK_IMPORTED_MODULE_7__["MatInput"], _angular_forms__WEBPACK_IMPORTED_MODULE_8__["DefaultValueAccessor"], _angular_forms__WEBPACK_IMPORTED_MODULE_8__["NgControlStatus"], _angular_forms__WEBPACK_IMPORTED_MODULE_8__["NgModel"], _angular_material_dialog__WEBPACK_IMPORTED_MODULE_3__["MatDialogActions"], _angular_material_button__WEBPACK_IMPORTED_MODULE_5__["MatButton"], _angular_material_dialog__WEBPACK_IMPORTED_MODULE_3__["MatDialogClose"]], encapsulation: 2 });
+    } }, directives: [_angular_material_dialog__WEBPACK_IMPORTED_MODULE_3__["MatDialogTitle"], _angular_material_dialog__WEBPACK_IMPORTED_MODULE_3__["MatDialogContent"], _angular_material_form_field__WEBPACK_IMPORTED_MODULE_7__["MatFormField"], _angular_material_input__WEBPACK_IMPORTED_MODULE_8__["MatInput"], _angular_forms__WEBPACK_IMPORTED_MODULE_9__["DefaultValueAccessor"], _angular_forms__WEBPACK_IMPORTED_MODULE_9__["NgControlStatus"], _angular_forms__WEBPACK_IMPORTED_MODULE_9__["NgModel"], _angular_material_dialog__WEBPACK_IMPORTED_MODULE_3__["MatDialogActions"], _angular_material_button__WEBPACK_IMPORTED_MODULE_6__["MatButton"], _angular_material_dialog__WEBPACK_IMPORTED_MODULE_3__["MatDialogClose"]], encapsulation: 2 });
 /*@__PURE__*/ (function () { _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵsetClassMetadata"](RegisterDialog, [{
         type: _angular_core__WEBPACK_IMPORTED_MODULE_0__["Component"],
         args: [{
@@ -1769,7 +2184,8 @@ class VerFileExplorerComponent {
         // Send an event to master to acquire already generated
         // files.
         this.msgService.sendMsg(new _message__WEBPACK_IMPORTED_MODULE_1__["QueryEvent"](["files"]));
-        this.msgService.register("job.msg.file.exists").subscribe(msg => {
+        this.msgService.register(msg => msg.type == "job.msg.file.exists")
+            .subscribe(msg => {
             let message = msg.content.message;
             for (let idx in message) {
                 this.results[idx] = message[idx];
@@ -1778,7 +2194,8 @@ class VerFileExplorerComponent {
         });
     }
     switchToGrowState() {
-        this.msgService.register("job.msg.file.new").subscribe(msg => {
+        this.msgService.register(msg => msg.type == "job.msg.file.new")
+            .subscribe(msg => {
             let file = msg.content.message;
             let unique_id = file['unique_id'];
             if (unique_id in this.results) {
