@@ -41,7 +41,6 @@ class VerControlTestCases(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self.revSyncer = RevSync()
 
-    @unittest.skip("")
     async def test_new_rev(self) -> None:
         # Setup
         request = HttpRequest_()
@@ -69,6 +68,7 @@ class VerControlTestCases(unittest.IsolatedAsyncioTestCase):
         # Verify
         rev = await sync_to_async(
             Revisions.objects.get, thread_sensitive=True)(pk='12345678')
+
         self.assertEqual("12345678", rev.sn)
         self.assertEqual("message", rev.comment)
         self.assertEqual("root", rev.author)

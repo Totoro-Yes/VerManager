@@ -159,7 +159,7 @@ class RevSync(ModuleDaemon):
         return True
 
     def revNewPush(self, rev: HttpRequest) -> bool:
-        self.revQueue.put(rev)
+        self.revQueue.put_nowait(rev)
         return True
 
     def gitlabWebHooksChecking(self, request: HttpRequest) -> Optional[Dict]:
