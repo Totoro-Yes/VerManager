@@ -123,8 +123,8 @@ class Worker:
             # Setup dispatch
             processor.set_type_dispatch_to_unit(Letter.NewTask, "Job")
 
-            # Start Processor
-            processor.start()
+        # Start Processor
+        processor.start()
 
         # Debug
         if configs.debug:
