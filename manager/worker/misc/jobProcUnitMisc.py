@@ -33,6 +33,7 @@ async def jobProcUnit_output_proc(datas: bytes, *args) -> None:
 
     try:
         decoded_datas = datas.decode("ANSI")
+        print(decoded_datas)
         letter = TaskLogLetter(taskid, decoded_datas)
     except Exception:
         return None
