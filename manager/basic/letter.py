@@ -300,9 +300,11 @@ class Letter:
             traceback.print_exc()
             raise Exception
 
-        dict_ = json.loads(letter)
-
-        type_ = dict_['type']
+        try:
+            dict_ = json.loads(letter)
+            type_ = dict_['type']
+        except Exception:
+            return None
 
         return parseMethods[type_].parse(s)
 
