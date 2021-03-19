@@ -206,9 +206,11 @@ class ServerInst(Thread):
 
         self._mmanager.addModule(dataLinker)
 
+        logPort = info.getConfig('logPort')
+
         # Add a UDP DataLink used to transfer Log of in doing jobs.
         dataLinker.addDataLink(
-            self._address, dataPort, DataLink.UDP_DATALINK,
+            self._address, logPort, DataLink.UDP_DATALINK,
             cmd_log_handler, None)
         dataLinker.addNotify("CMD_LOG", cmd_log_notify, None)
 

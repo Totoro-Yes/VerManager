@@ -454,7 +454,7 @@ class JobProcUnit(JobProcUnitProto):
         address = self._config.getConfig('MASTER_ADDRESS')
 
         await self._output_space.async_call(
-            "conn", "create_endpoint", "LogEnd", (address['host'], address['dataPort']))
+            "conn", "create_endpoint", "LogEnd", (address['host'], address['logPort']))
         endpoint = self._output_space.call("conn", "get_endpoint", "LogEnd")
 
         # Setup CommandExecutor
