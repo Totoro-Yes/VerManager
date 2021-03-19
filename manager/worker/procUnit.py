@@ -423,10 +423,15 @@ class JobProcUnit(JobProcUnitProto):
         # Check is clean
         if os.path.exists(build_dir+"/"+projName):
             if await self.cleanup() is False:
+                # Change state to dirty
+                self._state = ProcUnit.STATE_DIRTY
                 # Job unable to begin from dirty state.
                 await self._notify_job_state(
                     tid, Letter.RESPONSE_STATE_FAILURE
                 )
+                # Update state so UnitMaintainer able
+                # to let ProcUnit clean again.
+                await self._channel.update_and_notify('state', self._state)
                 return
 
         commands = [

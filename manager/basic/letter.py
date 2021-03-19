@@ -176,7 +176,7 @@ class Letter:
     Heartbeat = "Hb"
 
     """
-    Formath of TaskLogLetter
+    Format of TaskLogLetter
     Type    : "TL"
     Header  : {ident":...}
     content : {"message":...}
@@ -211,14 +211,14 @@ class Letter:
     # Generate a json string
     def toString(self) -> str:
         # length of content after length
-        headerStr = str(self.header).replace("'", "\"")
-        contentStr = str(self.content).replace("'", "\"")
+        headerStr = json.dumps(self.header)
+        contentStr = json.dumps(self.content)
         return Letter.format % (self.type_, headerStr, contentStr)
 
     def __repr__(self) -> str:
         # length of content after length
-        headerStr = str(self.header).replace("'", "\"")
-        contentStr = str(self.content).replace("'", "\"")
+        headerStr = json.dumps(self.header)
+        contentStr = json.dumps(self.content)
         return Letter.format % (self.type_, headerStr, contentStr)
 
     def toJson(self) -> Dict:

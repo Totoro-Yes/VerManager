@@ -37,7 +37,7 @@ class Message(abc.ABC):
         self.content = content
 
     def __str__(self) -> str:
-        content = str(self.content).replace("'", "\"")
+        content = json.dumps(self.content)
         return Message.FORMAT_TEMPLATE % (self.type, content)
 
     def __iter__(self) -> Generator:
