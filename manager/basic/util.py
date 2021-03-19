@@ -28,6 +28,7 @@ import subprocess
 import socket
 import asyncio
 import psutil
+import chardet
 
 from concurrent.futures import ThreadPoolExecutor
 from threading import Thread
@@ -221,3 +222,12 @@ async def stop_ps_recursive_async(
     with ThreadPoolExecutor() as e:
         return await asyncio.get_running_loop()\
             .run_in_executor(e, stop_ps_recursive, pid, timeout)
+
+
+def decode_confident(bs: bytes) -> str:
+    det = chardet.detect(bs)
+    encode = det['encoding']
+    if encode is None:
+        return ""
+    else:
+        return bs.decode(encode)

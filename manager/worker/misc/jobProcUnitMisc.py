@@ -21,7 +21,9 @@
 # SOFTWARE.
 
 import asyncio
+
 from manager.basic.letter import TaskLogLetter
+from manager.basic.util import decode_confident
 
 
 async def jobProcUnit_output_proc(datas: bytes, *args) -> None:
@@ -31,10 +33,9 @@ async def jobProcUnit_output_proc(datas: bytes, *args) -> None:
     """
     taskid, endpoint = args[0], args[1]  # type: str, asyncio.DatagramTransport
 
-    try:
-        decoded_datas = datas.decode("ANSI").encode("utf8").decode("utf8")
-        letter = TaskLogLetter(taskid, decoded_datas)
-    except Exception:
+    datas_decode = decode_confident(datas)
+    if datas_decode == "":
         return None
+    letter = TaskLogLetter(taskid, datas_decode)
 
     endpoint.sendto(letter.toBytesWithLength())
