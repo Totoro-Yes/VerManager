@@ -107,19 +107,23 @@ class Processor(ModuleDaemon, Subject):
         for unit in self._unit_container.values():
             unit.start()
 
-        while True:
-            letter = await self._reqQ.get()
+        try:
+            while True:
+                letter = await self._reqQ.get()
 
-            # Log
-            await self.notify(self.PROC_LOG, (self.NAME, str(letter)))
+                # Log
+                await self.notify(self.PROC_LOG, (self.NAME, str(letter)))
 
-            # Deal with CommandLetter
-            if isinstance(letter, CommandLetter):
-                await self.CMD_Proc(letter)
-            else:
-                # If not a CommandLetter then dispatch to
-                # ProcUnit
-                await self._dispatcher.dispatch(letter)
+                # Deal with CommandLetter
+                if isinstance(letter, CommandLetter):
+                    await self.CMD_Proc(letter)
+                else:
+                    # If not a CommandLetter then dispatch to
+                    # ProcUnit
+                    await self._dispatcher.dispatch(letter)
+        except Exception:
+            import traceback
+            traceback.print_exc()
 
     def register(self, uid: str, comp: ChannelReceiver) -> None:
         if self._channel.isChannelExists(uid):
