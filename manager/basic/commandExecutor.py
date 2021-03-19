@@ -64,6 +64,7 @@ class CommandExecutor:
             return -1
 
         self._running = True
+        self._last_active = datetime.utcnow()
 
         command_str = packShellCommands(self._cmds)
         ref = execute_shell(
