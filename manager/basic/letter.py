@@ -211,14 +211,20 @@ class Letter:
     # Generate a json string
     def toString(self) -> str:
         # length of content after length
-        headerStr = json.dumps(self.header)
-        contentStr = json.dumps(self.content)
+        try:
+            headerStr = json.dumps(self.header)
+            contentStr = json.dumps(self.content)
+        except TypeError:
+            return self._toStringByReplace()
+
         return Letter.format % (self.type_, headerStr, contentStr)
 
     def __repr__(self) -> str:
-        # length of content after length
-        headerStr = json.dumps(self.header)
-        contentStr = json.dumps(self.content)
+        return self.toString()
+
+    def _toStringByReplace(self) -> str:
+        headerStr = str(self.header).replace("'", "\"")
+        contentStr = str(self.content).replace("'", "\"")
         return Letter.format % (self.type_, headerStr, contentStr)
 
     def toJson(self) -> Dict:
