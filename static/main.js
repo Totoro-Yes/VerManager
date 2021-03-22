@@ -345,7 +345,6 @@ class TaskStateService {
     retrieve_log_msg(id) {
         let i = 0;
         let obsv = this.msg_src.pipe(Object(rxjs_operators__WEBPACK_IMPORTED_MODULE_2__["filter"])(msg => {
-            console.log(msg);
             let target_id = msg.content.message.uid + "_" +
                 msg.content.message.task;
             return id == target_id;
