@@ -137,7 +137,7 @@ class EVENT_HANDLER_TOOLS:
         except DOC_GEN_FAILED_TO_GENERATE:
             # Fail to generate log file
             # log into log file.
-            return pathSplit[-1]
+            return filePath.split("/")[-1]
 
         # Pack into a zipfile may take a while
         # do it in another process.
