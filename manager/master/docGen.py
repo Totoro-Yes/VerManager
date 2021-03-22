@@ -58,7 +58,7 @@ async def log_gen(version: str, path: str = "./log.txt") -> T.Optional[str]:
         try:
             await doc_gen(ver_contents, path)
         except Exception as e:
-            share.logger.log_put(
+            await share.logger.log_put(
                 "Misc", "doc_gen from custom.py failed: " + str(e))
             raise DOC_GEN_FAILED_TO_GENERATE()
     else:
@@ -73,7 +73,7 @@ async def log_gen(version: str, path: str = "./log.txt") -> T.Optional[str]:
                     [changelogfile.write(line+"\n") for line in logs]
         except Exception as e:
             os.remove(path)
-            share.logger.log_put("Misc", "log_gen failed: " + str(e))
+            await share.logger.log_put("Misc", "log_gen failed: " + str(e))
 
     return path
 
