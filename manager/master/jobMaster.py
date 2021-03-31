@@ -38,7 +38,7 @@ from channels.layers import get_channel_layer
 from channels.db import database_sync_to_async
 from manager.master.job import VerResult
 from manager.basic.mmanager import Module
-from manager.basic.observer import Subject
+from manager.basic.observer import Subject, Observer
 from manager.master.persistentDB import PersistentDB
 
 from client.messages import JobInfoMessage, JobStateChangeMessage, \
@@ -235,7 +235,7 @@ class JobMasterMsgSrc(MsgSource):
         )
 
 
-class JobMaster(Endpoint, Module, Subject):
+class JobMaster(Endpoint, Module, Subject, Observer):
 
     M_NAME = "JobMaster"
     NOTIFY_LOG = "JobMasterLog"
@@ -258,6 +258,9 @@ class JobMaster(Endpoint, Module, Subject):
         self.source = JobMasterMsgSrc(self.M_NAME)
         self.source.jobs = self._jobs
 
+        # Observer init
+        Observer.__init__(self)
+
         # Lock to prevent race conditon of
         # unique id access.
         self._lock = asyncio.Lock()
@@ -267,6 +270,26 @@ class JobMaster(Endpoint, Module, Subject):
 
     async def cleanup(self) -> None:
         return
+
+    async def job_post_notify_fin_handler(self, jobid: str) -> None:
+        await self.job_post_notify_handler_internal(jobid, True)
+
+    async def job_post_notify_fail_handler(self, jobid: str) -> None:
+        await self.job_post_notify_handler_internal(jobid, False)
+
+    async def job_post_notify_handler_internal(
+            self, jobid: str, fin: bool) -> None:
+        """
+        Fin the job if PostProcessing is done correctly otherwise set the job
+        to failure state.
+        """
+        if jobid not in self._jobs:
+            return
+
+        state = Task.STATE_STR_MAPPING[Task.STATE_FINISHED] if fin else \
+            Task.STATE_STR_MAPPING[Task.STATE_FAILURE]
+
+        await self._job_maintain(jobid, state)
 
     async def _job_record(self, job: Job) -> None:
         # Job record
@@ -553,15 +576,11 @@ class JobMaster(Endpoint, Module, Subject):
 
         if state == Task.STATE_STR_MAPPING[Task.STATE_FINISHED]:
             # If Job is finished
-            if job.is_fin():
+            if job.is_fin() and job.job_result is not None:
                 await self._job_maintain_terminate(jobid, JobFinMessage(jobid))
 
-            # A Fin job's job_result field must not none
-            if job.job_result is None:
-                return
-
-            vr = VerResult(str(job.unique_id), job.jobid, job.job_result)
-            self.source.real_time_broadcast(JobNewResultMessage(vr), {})
+                vr = VerResult(str(job.unique_id), job.jobid, job.job_result)
+                self.source.real_time_broadcast(JobNewResultMessage(vr), {})
 
         elif state == Task.STATE_STR_MAPPING[Task.STATE_FAILURE]:
             # Cancel Job, cause a task of the job is failure.

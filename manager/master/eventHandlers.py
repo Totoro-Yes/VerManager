@@ -274,6 +274,9 @@ async def responseHandler_ResultStore(
     fileName = path.split(seperator)[-1]
     resultDir = cfg.config.getConfig("ResultDir")
 
+    # Hand to PostProc so PostProc able to attach a changelog
+    # to result file.
+
     try:
         if not cfg.skip_doc_gen:
             fileName = await EVENT_HANDLER_TOOLS.packDataWithChangeLog(

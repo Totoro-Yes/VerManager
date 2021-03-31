@@ -131,3 +131,21 @@ class PERSISTENT_DB_FILE_NOT_EXISTS(Exception):
 
     def __str__(self) -> str:
         return "File " + self.filename + " is not found in PersistentDB"
+
+
+###############################################################################
+#                                   PostProc                                  #
+###############################################################################
+class POSTPROC_NO_MORE_SPACE(Exception):
+
+    def __str__(self) -> str:
+        return "PostProc no more space to hold Task."
+
+
+class POSTPROC_NO_HANDLERS_MATCH_WITH_THE_KEY(Exception):
+
+    def __init__(self, key: str) -> None:
+        self.key = key
+
+    def __str__(self) -> str:
+        return "No such PostHandler"
