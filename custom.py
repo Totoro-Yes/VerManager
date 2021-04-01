@@ -4,13 +4,22 @@ import typing as T
 import gitlab
 import markdown
 import re
+import manager.master.configs as share
 from bs4 import BeautifulSoup
 from tabulate import tabulate
 from manager.master.exceptions import CUSTOM_FUNC_DOC_GEN_FAIL, \
     DOC_GEN_FAILED_TO_GENERATE
 from concurrent.futures import ThreadPoolExecutor
+from manager.master.postProc import PostProc
+from manager.master.misc import postProc__AttachChangedLog
 
 gitlab_url = "http://10.5.4.211:8011"
+
+
+async def custom_init() -> None:
+    assert(share.mmanager is not None)
+    pp = T.cast(PostProc, share.mmanager.getModule(PostProc.NAME))
+    pp.addProc("GL8900", postProc__AttachChangedLog)
 
 
 async def doc_gen(
