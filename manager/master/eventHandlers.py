@@ -32,7 +32,8 @@ import shutil
 import manager.master.configs as cfg
 from VerManager.settings import DATA_URL
 from manager.master.docGen import log_gen
-from manager.master.exceptions import DOC_GEN_FAILED_TO_GENERATE
+from manager.master.exceptions import DOC_GEN_FAILED_TO_GENERATE, \
+    POSTPROC_NO_HANDLERS_MATCH_WITH_THE_KEY
 
 from typing import List, Dict, Optional, cast, Callable, Tuple, \
     Any
@@ -57,6 +58,8 @@ from manager.basic.util import pathSeperator
 from manager.basic.notify import Notify, WSCNotify
 from manager.basic.dataLink import DataLink, DataLinkNotify
 from manager.master.persistentDB import PersistentDB, TAIL
+from manager.master.postProc import PostProc
+from manager.master.exceptions import POSTPROC_NO_MORE_SPACE
 
 ActionInfo = namedtuple('ActionInfo', 'isMatch execute args')
 path = str
@@ -215,7 +218,11 @@ async def responseHandler(
     if task.stateChange(state) is Error:
         return None
 
-    await EVENT_HANDLER_TOOLS.do_action(task, state)
+    try:
+        await EVENT_HANDLER_TOOLS.do_action(task, state)
+    except Exception:
+        state = Task.STATE_FAILURE
+        task.stateChange(Task.STATE_FAILURE)
 
     # Notify to components that
     # task's state is changed.
@@ -261,37 +268,22 @@ async def temporaryBuild_handling(
 async def responseHandler_ResultStore(
         task: Task, env: Entry.EntryEnv) -> None:
 
-    assert(cfg.config is not None)
-
-    logger = env.modules.getModule('Logger')
-
-    taskId = task.id()
-
-    trans_fin = EVENT_HANDLER_TOOLS.transfer_finished
-    path = trans_fin[taskId]
-
-    seperator = pathSeperator()
-    fileName = path.split(seperator)[-1]
-    resultDir = cfg.config.getConfig("ResultDir")
+    path = EVENT_HANDLER_TOOLS.transfer_finished[task.id()]
 
     # Hand to PostProc so PostProc able to attach a changelog
     # to result file.
+    pp = cast(PostProc, env.modules.getModule(PostProc.NAME))
 
+    # Exception of post_req unable
+    # to be processed here.
     try:
-        if not cfg.skip_doc_gen:
-            fileName = await EVENT_HANDLER_TOOLS.packDataWithChangeLog(
-                task.getVSN(), path, resultDir)
-
-    except FileNotFoundError as e:
-        traceback.print_exc()
-        await Logger.putLog(logger, letterLog, str(e))
-    except PermissionError as e:
-        traceback.print_exc()
-        await Logger.putLog(logger, letterLog, str(e))
-    except Exception:
-        traceback.print_exc()
-
-    task.job.job_result = job_result_url(taskId.split("_")[0], fileName)
+        pp.post_req(
+            # Request
+            (task.job.cmd_id, task, path)
+        )
+    except POSTPROC_NO_HANDLERS_MATCH_WITH_THE_KEY:
+        # This task no need to do post proc
+        task.job.result = path
 
 
 def job_result_url(unique_id: str, fileName: str) -> str:

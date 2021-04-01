@@ -23,7 +23,6 @@
 import asyncio
 import traceback
 import manager.master.configs as config
-
 from functools import reduce
 from manager.models import Jobs, JobInfos, Informations, \
     JobHistory, TaskHistory
@@ -271,13 +270,12 @@ class JobMaster(Endpoint, Module, Subject, Observer):
     async def cleanup(self) -> None:
         return
 
-    async def job_post_notify_fin_handler(self, jobid: str) -> None:
-        await self.job_post_notify_handler_internal(jobid, True)
+    async def job_post_notify_handler(self, msg: Tuple[bool, str]) -> None:
+        success, tid = msg
+        jobid = tid.split("_")[0]
+        await self._job_post_notify_handler_internal(jobid, success)
 
-    async def job_post_notify_fail_handler(self, jobid: str) -> None:
-        await self.job_post_notify_handler_internal(jobid, False)
-
-    async def job_post_notify_handler_internal(
+    async def _job_post_notify_handler_internal(
             self, jobid: str, fin: bool) -> None:
         """
         Fin the job if PostProcessing is done correctly otherwise set the job

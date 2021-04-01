@@ -20,6 +20,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import typing as Typ
+
 
 ###############################################################################
 #                                     Misc                                    #
@@ -149,3 +151,15 @@ class POSTPROC_NO_HANDLERS_MATCH_WITH_THE_KEY(Exception):
 
     def __str__(self) -> str:
         return "No such PostHandler"
+
+
+class POSTPROC_INVALID_REQUEST(Exception):
+
+    def __str__(self) -> str:
+        return "Request to PostProc is invalid"
+
+
+class POSTPROC_HANDLER_FATAL(Exception):
+
+    def __str__(self) -> str:
+        return "PostProc Handler fatal"

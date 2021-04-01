@@ -26,18 +26,16 @@ from manager.basic.mmanager import ModuleDaemon
 from manager.basic.observer import Subject
 from manager.master.task import Task
 from manager.master.exceptions import POSTPROC_NO_MORE_SPACE, \
-    POSTPROC_NO_HANDLERS_MATCH_WITH_THE_KEY
-from manager.basic.util import loop_forever_async
+    POSTPROC_NO_HANDLERS_MATCH_WITH_THE_KEY, POSTPROC_INVALID_REQUEST
 
-PostHandler = Typ.Callable[[Task], Typ.Coroutine]
-PostProcReq = Typ.Tuple[str, Task]
+PostHandler = Typ.Callable[[Task, Typ.Any], Typ.Coroutine]
+PostProcReq = Typ.Tuple[str, Task, Typ.Any]
 
 
 class PostProc(ModuleDaemon, Subject):
 
     NAME = "PostProc"
     NOTIFY_TASK_DONE = "DONE"
-    NOTIFY_TAKS_FAIL = "FAIL"
 
     def __init__(self) -> None:
         ModuleDaemon.__init__(self, self.NAME)
@@ -45,7 +43,6 @@ class PostProc(ModuleDaemon, Subject):
         # Subject Init
         Subject.__init__(self, self.NAME)
         self.addType(self.NOTIFY_TASK_DONE)
-        self.addType(self.NOTIFY_TAKS_FAIL)
 
         # Queue of tasks, which need to be
         # processed.
@@ -59,7 +56,16 @@ class PostProc(ModuleDaemon, Subject):
     async def cleanup(self) -> None:
         return
 
-    def post_req(self, req: Typ.Tuple[str, Task]) -> None:
+    def post_req(self, req: PostProcReq) -> None:
+        # Is valid request ?
+        if not self._isValidRequest(req):
+            raise POSTPROC_INVALID_REQUEST()
+
+        # To check that is any handler match with
+        # the key within the request
+        if not self.isExists(req[0]):
+            raise POSTPROC_NO_HANDLERS_MATCH_WITH_THE_KEY(req[0])
+
         if self._reqs.full():
             raise POSTPROC_NO_MORE_SPACE()
 
@@ -67,10 +73,25 @@ class PostProc(ModuleDaemon, Subject):
 
     async def run(self) -> None:
         while True:
-            await self.PostProcWork_Step()
+            await self._PostProcWork_Step()
 
-    async def PostProcWork_Step(self) -> None:
-        key, task = await self._reqs.get()
+    def _isValidRequest(self, req: Typ.Any) -> bool:
+
+        # Check type of request
+        try:
+            key, task, arg = req
+        except Exception:
+            return False
+
+        if not isinstance(key, str) or not isinstance(task, Task):
+            return False
+
+        return True
+
+    async def _PostProcWork_Step(self) -> None:
+        ret = True
+
+        key, task, arg = await self._reqs.get()
 
         # To check that is this request able to
         # process.
@@ -79,11 +100,15 @@ class PostProc(ModuleDaemon, Subject):
 
         # Process task
         handlers = self._handlers[key]
-        for h in handlers:
-            await h(task)
+
+        try:
+            for h in handlers:
+                await h(task, arg)
+        except Exception:
+            ret = False
 
         await self.notify(
-            self.NOTIFY_TASK_DONE, task.taskId)
+            self.NOTIFY_TASK_DONE, (ret, task.taskId))
 
     def addProc(self, key: str, handler: PostHandler):
 
@@ -96,3 +121,6 @@ class PostProc(ModuleDaemon, Subject):
         if key not in self._handlers:
             raise POSTPROC_NO_HANDLERS_MATCH_WITH_THE_KEY(key)
         return self._handlers[key]
+
+    def isExists(self, key: str) -> bool:
+        return key in self._handlers

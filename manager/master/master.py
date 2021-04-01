@@ -20,6 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import os
 import asyncio
 import manager.master.eventHandlers as EVENT_HANDLERS
 import manager.master.configs as cfg
@@ -49,6 +50,7 @@ from manager.master.jobMaster import JobMaster
 from manager.master.proxy import Proxy
 from manager.models import model_init
 from manager.master.persistentDB import PersistentDB
+from manager.master.postProc import PostProc
 
 
 ServerInstance = None  # type:  Optional['ServerInst']
@@ -120,6 +122,8 @@ class ServerInst(Thread):
 
         # JobMaster Init
         jobMaster = JobMaster()
+        jobMaster.handler_install(
+            PostProc.NAME, jobMaster.job_post_notify_handler)
         self.addModule(jobMaster)
 
         # Dispatcher Init
@@ -162,6 +166,10 @@ class ServerInst(Thread):
 
         revSyncner = RevSync()
         self.addModule(revSyncner)
+
+        postProc = PostProc()
+        postProc.subscribe(postProc.NOTIFY_TASK_DONE, jobMaster)
+        self.addModule(postProc)
 
         # Subscribe to subjects
         eventListener.subscribe(EventListener.NOTIFY_LOST, workerRoom)
@@ -220,6 +228,12 @@ class ServerInst(Thread):
         self._mmanager.addModule(proxy)
 
         await self._mmanager.start_all()
+
+        if os.path.exists("custom.py"):
+            from custom import custom_init
+            # Do initialization defined in
+            # custom.py
+            await custom_init()
 
         # Join to all modules
         await self._mmanager.join()
