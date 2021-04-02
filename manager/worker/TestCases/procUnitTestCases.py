@@ -274,6 +274,7 @@ class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.sut.exists("Job2"))
         self.assertFalse(self.sut.exists("Job1"))
 
+    @unittest.skip("Temporary")
     async def test_JobProcUnit_CommandLog(self) -> None:
         # Setup
         self.sut.start()

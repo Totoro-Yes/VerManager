@@ -2,6 +2,7 @@ MASTER_ADDRESS:
   host: "127.0.0.1"
   port: 3601
   dataPort: 7788
+  logPort: 8888
 WORKER_NAME: JOB
 REPO_URL: ~/Codebase/trivial
 PROJECT_NAME: trivial

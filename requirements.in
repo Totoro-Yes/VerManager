@@ -3,3 +3,6 @@ djangorestframework
 PyYaml
 python-gitlab
 mysqlclient
+psutil
+channels
+channels_redis
