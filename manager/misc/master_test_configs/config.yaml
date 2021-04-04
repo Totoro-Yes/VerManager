@@ -1,11 +1,13 @@
 Address: "127.0.0.1"
 Port: 30001
 dataPort: 8899
+logPort: 8900
 
 LogDir: ./log
 ResultDir: ./data
 Storage: ./data
 PostStorage: ./PostStorage
+Meta: ./meta
 
 GitlabUrl: http://10.5.4.211:8011
 Project_ID: 34

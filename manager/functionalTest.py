@@ -95,7 +95,8 @@ class FunctionalTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncTearDown(self) -> None:
         for d in ["Build", "Build1", "Build2", "Post", "data", "log"]:
-            shutil.rmtree(d)
+            if os.path.exists(d):
+                shutil.rmtree(d)
 
     @unittest.skip("")
     async def test_Functional_DoJob(self) -> None:
@@ -183,7 +184,6 @@ class MergerLostTestCases(unittest.IsolatedAsyncioTestCase):
             "127.0.0.1", 30001, "./manager/misc/master_test_configs/config.yaml",
         )
 
-    @unittest.skip("")
     async def test_MergerLost(self) -> None:
         # Create Merger and Worker
         await WorkerCreate("./manager/misc/worker_test_configs/config.yaml",

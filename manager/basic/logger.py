@@ -146,7 +146,6 @@ class Logger(ModuleDaemon, Observer):
         return formated_message
 
     async def listenTo(self, data: Tuple[str, str]) -> None:
-        print(data)
         tunnelname, msg = data
 
         if tunnelname not in self.logTunnels:

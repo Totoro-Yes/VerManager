@@ -1,6 +1,8 @@
 MASTER_ADDRESS:
   host: "127.0.0.1"
   port: 30000
+  dataPort: 8899
+  logPort: 8900
 
 MERGER_ADDRESS:
   host: "127.0.0.1"
@@ -12,7 +14,7 @@ REPO_URL: git@10.5.4.211:gpon/olt.git
 
 STORAGE: DoneStorage
 
-PROJECT_NAME:  olt
+PROJECT_NAME:  try
 
 QUEUE_SIZE: 1024
 

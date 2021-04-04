@@ -6,3 +6,6 @@ mysqlclient
 psutil
 channels
 channels_redis
+markdown
+bs4
+tabulate

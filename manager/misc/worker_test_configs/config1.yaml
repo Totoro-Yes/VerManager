@@ -2,6 +2,7 @@ MASTER_ADDRESS:
   host: "127.0.0.1"
   port: 30001
   dataPort: 8899
+  logPort: 8900
 
 MERGER_ADDRESS:
   host: "127.0.0.1"
@@ -10,11 +11,11 @@ MERGER_ADDRESS:
 
 WORKER_NAME: WORKER_EXAMPLE_1
 
-REPO_URL: git@10.5.4.211:root/ci_config.git
+REPO_URL: git@127.0.0.1:root/try.git
 
 STORAGE: DoneStorage
 
-PROJECT_NAME: ci_config
+PROJECT_NAME: try
 
 QUEUE_SIZE: 1024
 
