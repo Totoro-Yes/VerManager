@@ -12,6 +12,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 gitlab_url = "http://10.5.4.211:8011"
 
+async def custom_init() -> None:
+    return
+
 
 async def doc_gen(
         contents: T.List[T.Tuple[str, T.List[str]]],
