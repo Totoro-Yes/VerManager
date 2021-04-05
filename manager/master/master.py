@@ -34,13 +34,13 @@ from manager.basic.mmanager import MManager, Module
 from manager.basic.info import Info
 from manager.basic.letter import Letter
 from manager.master.workerRoom import WorkerRoom, M_NAME as WR_M_NAME
-from manager.master.dispatcher import Dispatcher, M_NAME as DISPATCHER_M_NAME, \
+from manager.master.dispatcher import Dispatcher, M_NAME as DISPATCHER_M_NAME,\
     viaOverhead, theListener
 from manager.master.eventListener \
     import EventListener, M_NAME as EVENT_M_NAME, Entry
 from manager.master.eventHandlers import responseHandler, binaryHandler, \
-    logHandler, logRegisterhandler, binaryNotify, NotifyHandle, cmd_log_handler, \
-    cmd_log_notify
+    logHandler, logRegisterhandler, binaryNotify, NotifyHandle, \
+    cmd_log_handler, cmd_log_notify
 from manager.master.logger import Logger
 from manager.basic.storage import Storage
 from manager.master.taskTracker import TaskTracker
@@ -51,6 +51,7 @@ from manager.master.proxy import Proxy
 from manager.models import model_init
 from manager.master.persistentDB import PersistentDB
 from manager.master.postProc import PostProc
+from manager.master.misc import postProcAttachLog, General_PostProc
 
 
 ServerInstance = None  # type:  Optional['ServerInst']
@@ -169,6 +170,7 @@ class ServerInst(Thread):
 
         postProc = PostProc()
         postProc.subscribe(postProc.NOTIFY_TASK_DONE, jobMaster)
+        postProc.addProc(General_PostProc, postProcAttachLog)
         self.addModule(postProc)
 
         # Subscribe to subjects

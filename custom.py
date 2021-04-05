@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 gitlab_url = "http://10.5.4.211:8011"
 
+
 async def custom_init() -> None:
     return
 
@@ -127,6 +128,6 @@ def wtd_no_extract_within_header(header: str, bs) -> str:
 def related_field_get(bs: BeautifulSoup) -> T.Any:
     headers = bs.find_all("h1") + bs.find_all("h2")
     return [
-        s for s in headers if s.getText() == 'Related_SN:' \
+        s for s in headers if s.getText() == 'Related_SN:'
         or s.getText() == 'Related_SN'
     ]

@@ -86,19 +86,22 @@ class FunctionalTestCases(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         # Create Master
         self.master = await masterCreate(
-            "127.0.0.1", 30001, "./manager/misc/master_test_configs/config.yaml")
+            "127.0.0.1", 30001,
+            "./manager/misc/master_test_configs/config.yaml")
 
         # Create Workers
-        self.worker = await WorkerCreate("./manager/misc/worker_test_configs/config.yaml")
-        self.worker1 = await WorkerCreate("./manager/misc/worker_test_configs/config1.yaml")
-        self.worker2 = await WorkerCreate("./manager/misc/worker_test_configs/config2.yaml")
+        self.worker = await WorkerCreate(
+            "./manager/misc/worker_test_configs/config.yaml")
+        self.worker1 = await WorkerCreate(
+            "./manager/misc/worker_test_configs/config1.yaml")
+        self.worker2 = await WorkerCreate(
+            "./manager/misc/worker_test_configs/config2.yaml")
 
     async def asyncTearDown(self) -> None:
         for d in ["Build", "Build1", "Build2", "Post", "data", "log"]:
             if os.path.exists(d):
                 shutil.rmtree(d)
 
-    @unittest.skip("")
     async def test_Functional_DoJob(self) -> None:
         # Exercise
         job = Job("Job", "GL8900", {"sn": "123456", "vsn": "Job"})
@@ -144,10 +147,12 @@ class WorkerLostTestCases(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         # Create Master
         self.master = await masterCreate(
-            "127.0.0.1", 30001, "./manager/misc/master_test_configs/config.yaml",
+            "127.0.0.1", 30001,
+            "./manager/misc/master_test_configs/config.yaml",
         )
         # Create Merger
-        self.merger = await WorkerCreate("./manager/misc/worker_test_configs/config.yaml")
+        self.merger = await WorkerCreate(
+            "./manager/misc/worker_test_configs/config.yaml")
 
     async def asyncTearDown(self) -> None:
         self.merger.terminate()
@@ -181,12 +186,15 @@ class MergerLostTestCases(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         # Create Master
         self.master = await masterCreate(
-            "127.0.0.1", 30001, "./manager/misc/master_test_configs/config.yaml",
+            "127.0.0.1", 30001,
+            "./manager/misc/master_test_configs/config.yaml",
         )
 
+    @unittest.skip("")
     async def test_MergerLost(self) -> None:
         # Create Merger and Worker
-        await WorkerCreate("./manager/misc/worker_test_configs/config.yaml",
+        await WorkerCreate(
+            "./manager/misc/worker_test_configs/config.yaml",
             startup_lost
         )
         await WorkerCreate("./manager/misc/worker_test_configs/config1.yaml")

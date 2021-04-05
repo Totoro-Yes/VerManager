@@ -354,7 +354,7 @@ class JobProcUnit(JobProcUnitProto):
         Stop in processing jobs
         """
         # Clear request space
-        self._normal_space._queue.clear()
+        self._normal_space._queue.clear()  # type: ignore
         await self.stopCurrentJob()
         await self.cleanup()
 
@@ -389,7 +389,7 @@ class JobProcUnit(JobProcUnitProto):
         if job is not None:
             if self._normal_space.qsize() > 0:
                 try:
-                    self._normal_space._queue.remove(job)
+                    self._normal_space._queue.remove(job)  # type: ignore
                 except ValueError:
                     pass
 
@@ -397,7 +397,7 @@ class JobProcUnit(JobProcUnitProto):
         if self._normal_space.qsize() == 0:
             return None
 
-        for job in self._normal_space._queue:
+        for job in self._normal_space._queue:  # type: ignore
             job_tid = cast(NewLetter, job).getTid()
 
             if tid == job_tid:
@@ -454,7 +454,8 @@ class JobProcUnit(JobProcUnitProto):
         address = self._config.getConfig('MASTER_ADDRESS')
 
         await self._output_space.async_call(
-            "conn", "create_endpoint", "LogEnd", (address['host'], address['logPort']))
+            "conn", "create_endpoint", "LogEnd",
+            (address['host'], address['logPort']))
         endpoint = self._output_space.call("conn", "get_endpoint", "LogEnd")
 
         # Setup CommandExecutor

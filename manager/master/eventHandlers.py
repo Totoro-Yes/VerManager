@@ -23,7 +23,6 @@
 # EventHandlers.py
 
 import asyncio
-import traceback
 import concurrent.futures
 
 import os
@@ -59,7 +58,7 @@ from manager.basic.notify import Notify, WSCNotify
 from manager.basic.dataLink import DataLink, DataLinkNotify
 from manager.master.persistentDB import PersistentDB, TAIL
 from manager.master.postProc import PostProc
-from manager.master.exceptions import POSTPROC_NO_MORE_SPACE
+from manager.master.misc import General_PostProc
 
 ActionInfo = namedtuple('ActionInfo', 'isMatch execute args')
 path = str
@@ -279,7 +278,7 @@ async def responseHandler_ResultStore(
     try:
         pp.post_req(
             # Request
-            (task.job.cmd_id, task, path)
+            (General_PostProc, task, path)
         )
     except POSTPROC_NO_HANDLERS_MATCH_WITH_THE_KEY:
         # This task no need to do post proc
