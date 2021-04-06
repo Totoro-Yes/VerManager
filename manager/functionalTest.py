@@ -100,8 +100,7 @@ class FunctionalTestCases(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self) -> None:
         for d in ["Build", "Build1", "Build2", "Post", "data", "log", "meta"]:
             if os.path.exists(d):
-                pass
-                #shutil.rmtree(d)
+                shutil.rmtree(d)
 
     async def test_Functional_DoJob(self) -> None:
         # Exercise
