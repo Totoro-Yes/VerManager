@@ -98,9 +98,10 @@ class FunctionalTestCases(unittest.IsolatedAsyncioTestCase):
             "./manager/misc/worker_test_configs/config2.yaml")
 
     async def asyncTearDown(self) -> None:
-        for d in ["Build", "Build1", "Build2", "Post", "data", "log"]:
+        for d in ["Build", "Build1", "Build2", "Post", "data", "log", "meta"]:
             if os.path.exists(d):
-                shutil.rmtree(d)
+                pass
+                #shutil.rmtree(d)
 
     async def test_Functional_DoJob(self) -> None:
         # Exercise
