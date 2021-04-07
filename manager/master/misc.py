@@ -57,6 +57,10 @@ async def postProcAttachLog(task: Task, path: str) -> None:
         import traceback; traceback.print_exc()
         raise e
 
+    import sys
+    sys.stdout.flush()
+    sys.stderr.flush()
+
 
 async def postProcAttachLog_work(task: Task, path: str) -> None:
     job_uid = str(task.job.unique_id)
