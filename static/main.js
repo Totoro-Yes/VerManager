@@ -686,7 +686,10 @@ class ProgressBarComponent {
         if (this.notify_allow === false) {
             return;
         }
+<<<<<<< HEAD
         console.log(msg);
+=======
+>>>>>>> 8769eb4... Add Web page
         this.job_state_message_handle_internal(msg);
         this.dataSource.data = this.get_jobs();
     }
