@@ -282,7 +282,7 @@ async def responseHandler_ResultStore(
         )
     except POSTPROC_NO_HANDLERS_MATCH_WITH_THE_KEY:
         # This task no need to do post proc
-        task.job.result = path
+        task.job.job_result = path
 
 
 def job_result_url(unique_id: str, fileName: str) -> str:

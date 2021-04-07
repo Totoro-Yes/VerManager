@@ -47,14 +47,14 @@ async def postProcAttachLog(task: Task, path: str) -> None:
     zipPath = reduce(
         lambda arg, f: f(arg),
         [lambda p: p.split("/"),
-         lambda pList: "/".join(pList[:-1]+[pList[-1] + ".log.txt"])],
+         lambda pList: "/".join(pList[:-1]+[pList[-1] + ".log.rar"])],
         path
     )
 
     try:
         await log_gen(task.getVSN(), "./log.txt")
     except DOC_GEN_FAILED_TO_GENERATE:
-        task.job.result = path
+        task.job.job_result = path
 
     with ProcessPoolExecutor() as e:
         await asyncio.get_running_loop()\
@@ -62,4 +62,4 @@ async def postProcAttachLog(task: Task, path: str) -> None:
                 e, zipPackHelper,
                 ["./log.txt", path], zipPath)
 
-    task.job.result = zipPath
+    task.job.job_result = zipPath
