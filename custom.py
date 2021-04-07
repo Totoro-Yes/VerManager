@@ -42,17 +42,18 @@ async def doc_gen(
                 table.append(["N/A", "N/A", line])
                 continue
 
-            iid = search.group()[1:]
-
-            with ThreadPoolExecutor() as e:
-                issue = await asyncio.get_running_loop()\
-                            .run_in_executor(e, issue_fetch, iid)
-
             try:
+                iid = search.group()[1:]
+
+                with ThreadPoolExecutor() as e:
+                    issue = await asyncio.get_running_loop()\
+                                .run_in_executor(e, issue_fetch, iid)
+
                 table.append(
                     data_fetch(iid, issue)
                 )
             except Exception:
+                import traceback; traceback.print_exc()
                 # Cleanup and raise an excepiton to notify
                 # upper component.
                 changelogfile.close()
