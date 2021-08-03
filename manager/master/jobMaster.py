@@ -490,6 +490,7 @@ class JobMaster(Endpoint, Module, Subject, Observer):
 
         for build in bs.getBuilds():
             # Command Preprocessing
+            # fixme: A more general solution is needed.
             build_preprocessing(build, [("<version>", vsn)])
 
             st = SingleTask(
