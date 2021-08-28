@@ -122,6 +122,17 @@ def job_to_jobInfoMsg(job: Job) -> JobInfoMessage:
     return JobInfoMessage(str(job.unique_id), job.jobid, task)
 
 
+class TaskID:
+
+    @staticmethod
+    def gen(tid: str, job: Job) -> str:
+        return str(job.unique_id) + "_" + tid
+
+    @staticmethod
+    def gen1(build: Build, job: Job) -> str:
+        return str(job.unique_id) + "_" + build.getIdent()
+
+
 class JobMasterMsgSrc(MsgSource):
 
     jobs = None  # type: Optional[Dict[str, Job]]
@@ -494,7 +505,7 @@ class JobMaster(Endpoint, Module, Subject, Observer):
             build_preprocessing(build, [("<version>", vsn)])
 
             st = SingleTask(
-                prepend_prefix(str(job.unique_id), build.getIdent()),
+                TaskID.gen1(build, job),
                 sn=sn,
                 revision=vsn,
                 build=build,
@@ -505,14 +516,13 @@ class JobMaster(Endpoint, Module, Subject, Observer):
             job.addTask(build.getIdent(), st)
 
         # Build PostTask
-        st_idents = [prepend_prefix(str(job.unique_id), build.getIdent())
-                     for build in bs.getBuilds()]
+        st_idents = [TaskID.gen1(build, job) for build in bs.getBuilds()]
 
         merge_command = bs.getMerge()
         build_preprocessing(merge_command.getBuild(), [("<version>", vsn)])
 
         pt = PostTask(
-            prepend_prefix(str(job.unique_id), job.jobid),
+            TaskID.gen(job.jobid, job),
             vsn,
             st_idents,
             merge_command

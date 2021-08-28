@@ -210,17 +210,22 @@ class Dispatcher(ModuleDaemon, Subject, Observer, Endpoint):
         if found then assign task to the worker
         and _tasks otherwise append to taskWait
         """
+        assert(self._taskTracker is not None)
+
         worker = self._search_proc_worker(task)
 
         # No workers satisfiy the condition.
         if worker is None:
-            await self._log("Task " + task.id() +
-                            " dispatch failed: No available worker")
+            await self._log(
+                "Task " + task.id() +
+                " dispatch failed: No available worker")
             return False
 
         try:
             await worker.do(task)
-            cast(TaskTracker, self._taskTracker).onWorker(task.id(), worker)
+
+            # Record that which worker the task is running
+            self._taskTracker.onWorker(task.id(), worker)
             await self._log(
                 "Task " + task.id() + " dispatch to Worker("
                 + worker.ident + ")"
@@ -334,6 +339,8 @@ class Dispatcher(ModuleDaemon, Subject, Observer, Endpoint):
     # in queue which name is taskWait
     async def _dispatching(self) -> None:
 
+        assert(self._workers is not None)
+
         while True:
             await asyncio.sleep(1)
 
@@ -345,17 +352,14 @@ class Dispatcher(ModuleDaemon, Subject, Observer, Endpoint):
 
                 # To check that is a worker available.
                 cond = condChooser[type(task_peek).__name__]
-                if cast(WorkerRoom, self._workers).\
-                   getWorkerWithCond(cond) == []:
-
+                if self._workers.getWorkerWithCond(cond) == []:
                     continue
 
                 # Dispatch task to worker
                 async with self.dispatchLock:
-                    current = self._waitArea.dequeue_nowait()
-                    success = await self._dispatch(current)
-                    if not success:
-                        await self._waitArea.enqueue(current)
+                    t = self._waitArea.dequeue_nowait()
+                    if not await self._dispatch(t):
+                        await self._waitArea.enqueue(t)
             else:
                 continue
 
