@@ -254,7 +254,7 @@ class DataLinker(ModuleTDaemon):
         while True:
             try:
                 tag, msg = self._msgQueue.get(timeout=3)
-            except multiprocessing.queues.Empty:
+            except multiprocessing.queues.Empty:  # type: ignore
                 if self._isNeedStop is True:
                     break
                 continue
