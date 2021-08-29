@@ -40,32 +40,26 @@ class POST_BINARY_STORE_FAILED(Exception):
     pass
 
 
+fds = {}  # type: Dict[str, BinaryIO]
+
 async def binaryStore(dl: DataLink, bl: BinaryLetter,
                       post_dir: str) -> None:
     """
     Save binaryfile to to PostDir.
     """
 
+    # Cause several file may transfer at the same time
+    # so need a dict to keep track of all of in transfered file.
+    global fds
+
+    tid = bl.getTid()
+    fileName = bl.getFileName()
+    version = bl.getParent()
+    menu = bl.getMenu()
+
     try:
-        # Cause several file may transfer at the same time
-        # so need a dict to keep track of all of in transfered file.
-        #
-        # Store info of in transfer file in binaryStore is better
-        # than in global cause these info should only be accessed
-        # by binaryStore.
-        if not hasattr(binaryStore, 'fds'):
-            binaryStore.fds = {}  # type: Dict[str, BinaryIO]
-
-        fds = cast(Dict[str, BinaryIO], binaryStore.fds)  # type: ignore
-
-        tid = bl.getTid()
-        fileName = bl.getFileName()
-        version = bl.getParent()
-        menu = bl.getMenu()
-
         if tid not in fds:
             # A new transfer file.
-
             fd = post_file_create(post_dir, version, fileName)
             if fd is None:
                 raise POST_BINARY_STORE_FAILED()
@@ -82,18 +76,18 @@ async def binaryStore(dl: DataLink, bl: BinaryLetter,
 
             # Notify to PostProcUnit that a file is transfer
             # finished.
-            dl.notify(DataLinkNotify("BINARY", (version, tid, fileName)))
+            dl.notify(DataLinkNotify("BINARY", (version, tid, fileName, menu)))
         else:
             fd.write(bStr)
     except Exception:
         # Notify to PostProcUnit that a file is fail to
         # transfer
-        dl.notify(DataLinkNotify("BINARY", (version, tid, "")))
+        dl.notify(DataLinkNotify("BINARY", (version, tid, "", "")))
         traceback.print_exc()
 
 
-def binaryStoreNotify(msg: Tuple[str, str, str], proc: Processor) -> None:
-    version, tid, fileName = msg[0], msg[1], msg[2]
-    bl = BinaryLetter(tid, bStr=b"", fileName=fileName, parent=version)
+def binaryStoreNotify(msg: Tuple[str, str, str, str], proc: Processor) -> None:
+    version, tid, fileName, menu= msg[0], msg[1], msg[2], msg[3]
+    bl = BinaryLetter(tid, bStr=b"", fileName=fileName, menu=menu, parent=version)
     # Notify PostProcUnit via send letter to Processor.
     proc.req(bl)
