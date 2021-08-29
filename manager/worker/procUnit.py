@@ -113,7 +113,7 @@ class ProcUnit(abc.ABC):
         self._state = self.STATE_STOP
 
         if self._channel is not None:
-            self._channel.update('state', self.STATE_STOP)
+            self._channel.update('state', str(self.STATE_STOP))
 
     def start(self) -> None:
         # Setup state
@@ -163,12 +163,12 @@ class ProcUnit(abc.ABC):
         if self._channel is None:
             return
 
-        self._channel.update('state', self._state)
+        self._channel.update('state', str(self._state))
         self._channel.update('ident', self._unitIdent)
-        self._channel.update('failureCount', 0)
+        self._channel.update('failureCount', str(0))
 
         uptime = (datetime.utcnow() - self._start_at).seconds
-        self._channel.update('uptime', uptime)
+        self._channel.update('uptime', str(uptime))
 
     async def _notify(self) -> None:
         if self._channel is None:
@@ -190,11 +190,6 @@ class ProcUnit(abc.ABC):
     @abc.abstractmethod
     async def reset(self) -> None:
         """ Reset ProcUnit's status to initial state """
-
-    def _send(self, letter: Letter) -> None:
-        if self._output_space is None:
-            raise PROC_UNIT_NO_OUTPUT_SPACE(self._unitIdent)
-        self._output_space.send_nowait(letter)
 
 
 class PROC_UNIT_NO_OUTPUT_SPACE(Exception):
@@ -235,11 +230,12 @@ async def job_result_transfer(target: str, job: NewLetter,
     projName = cast(Info, configs.config).getConfig("PROJECT_NAME")
     result_path = build_dir + "/" + projName + '/' + extra['resultPath']
     fileName = result_path.split("/")[-1]
+    menu = extra['PostTarget']
 
     if not os.path.exists(result_path):
         raise RESULT_FILE_NOT_FOUND(result_path)
 
-    await output.sendfile(target, result_path, tid, version, fileName)
+    await output.sendfile(target, result_path, tid, version, fileName, menu)
 
 
 async def do_job_result_transfer(path, tid: str, linkid: str,
@@ -727,6 +723,7 @@ class PostProcUnit(PostProcUnitProto):
         # Make target post's ident via
         # merge unique_id with version's ident
         post_ident = tid.split("_")[0] + "_" + version
+
         if post_ident not in self._posts:
             return
         else:
@@ -736,7 +733,7 @@ class PostProcUnit(PostProcUnitProto):
 
         if fileName == "":
             # Invalid filename
-            self.cancel(post_ident)
+            await self.cancel(post_ident)
             await self._notify_job_state(
                 post_ident, Letter.RESPONSE_STATE_FAILURE)
 
@@ -757,7 +754,7 @@ class PostProcUnit(PostProcUnitProto):
             fileName = path.split(pathSeperator())[-1]
 
             await self._output_space.sendfile(
-                "Master", path, post.ident(), post.version(), fileName)
+                "Master", path, post.ident(), post.version(), fileName, "")
 
             # Wait a seonds
             await asyncio.sleep(3)
@@ -809,7 +806,6 @@ class PostProcUnit(PostProcUnitProto):
         while True:
             try:
                 job = await self.job_retrive()
-
                 if isinstance(job, BinaryLetter):
                     await self._frag_collect(job)
                 elif isinstance(job, PostTaskLetter):

@@ -109,12 +109,12 @@ class Connector:
         return None
 
     async def sendFile(self, linkid: str, tid: str, path: str,
-                       version: str, fileName: str) -> bool:
+                       version: str, fileName: str, menu: str) -> bool:
         f = open(path, "rb")
 
         for line in f:
             bLetter = BinaryLetter(
-                tid=tid, bStr=line,
+                tid=tid, bStr=line, menu=menu,
                 parent=version, fileName=fileName)
             await self.q.put(bLetter)
 

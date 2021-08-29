@@ -244,7 +244,7 @@ class Linker:
 
     @staticmethod
     def _do_send_file(sock: socket, path: str, tid: str,
-                      version: str, fileName: str) -> bool:
+                      version: str, fileName: str, menu: str) -> bool:
 
         try:
             with open(path, "rb") as f:
@@ -254,13 +254,13 @@ class Linker:
                         break
 
                     bLetter = BinaryLetter(
-                        tid=tid, bStr=bytes,
+                        tid=tid, bStr=bytes, menu=menu,
                         parent=version, fileName=fileName)
 
                     sending_sock(sock, bLetter)
 
             lastLetter = BinaryLetter(
-                tid=tid, bStr=b"",
+                tid=tid, bStr=b"", menu=menu,
                 parent=version, fileName=fileName)
             sending_sock(sock, lastLetter)
 
@@ -272,7 +272,7 @@ class Linker:
         return True
 
     async def sendfile(self, linkid: str, tid: str, path: str,
-                       version: str, fileName: str) -> bool:
+                       version: str, fileName: str, menu: str) -> bool:
         """
         First, open a datalink to target then transfer file.
         """
@@ -281,6 +281,9 @@ class Linker:
             address = cfg.config.getConfig('MASTER_ADDRESS')
         elif linkid == 'Poster':
             address = cfg.config.getConfig('MERGER_ADDRESS')
+        else:
+            return False
+
         r, w = await asyncio.open_connection(
             address['host'], address['dataPort'])
         sock = w.transport.get_extra_info('socket')
@@ -288,7 +291,7 @@ class Linker:
             with ProcessPoolExecutor() as e:
                 await self._loop.run_in_executor(
                     e, self._do_send_file, sock._sock,
-                    path, tid, version, fileName)
+                    path, tid, version, fileName, menu)
 
             # Close DataLink
             w.close()
@@ -400,9 +403,9 @@ class Connector(ChannelReceiver):
             self._linker.sendLetter(linkid, letter), timeout=timeout)
 
     async def sendFile(self, linkid: str, tid: str, path: str,
-                       version: str, fileName: str) -> bool:
+                       version: str, fileName: str, menu: str) -> bool:
         return await self._linker.sendfile(
-            linkid, tid, path, version, fileName)
+            linkid, tid, path, version, fileName, menu)
 
     def link_state(self, linkid: str) -> int:
         return self._linker.link_state(linkid)

@@ -40,7 +40,7 @@ class ConnectorFake(Connector):
 class MonitorTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
-        cfg.config = Info("./manager/worker/config.yaml")
+        cfg.config = Info("./manager/misc/worker_test_configs/config.yaml")
         self.m = Monitor("Worker")
         self.m.setupConnector(ConnectorFake())
 
@@ -67,15 +67,22 @@ class MonitorTestCase(unittest.IsolatedAsyncioTestCase):
 
         self.m.start()
 
-        # To Pending state.
-        await asyncio.sleep(1)
-        await so1.pending()
         self.assertTrue(self.m.state() == Monitor.READY)
+
+        # To Pending state.
+        await so1.pending()
+        await asyncio.sleep(1)
+        self.assertTrue(self.m.state() == Monitor.PENDING)
 
         # To Ready state
         await so2.ready()
         await asyncio.sleep(1)
         self.assertTrue(self.m.state() == Monitor.PENDING)
+
+        await so1.ready()
+        await so2.ready()
+        await asyncio.sleep(1)
+        self.assertTrue(self.m.state() == Monitor.READY)
 
     async def test_Monitor_ProcUnitDirty(self) -> None:
         # Setup

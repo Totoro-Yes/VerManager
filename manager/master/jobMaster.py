@@ -34,12 +34,11 @@ from manager.master.build import Build, BuildSet
 from manager.master.task import SingleTask, PostTask, Task
 from manager.basic.endpoint import Endpoint
 from channels.layers import get_channel_layer
-from channels.db import database_sync_to_async
+from channels.db import database_sync_to_async as toAsync
 from manager.master.job import VerResult
 from manager.basic.mmanager import Module
 from manager.basic.observer import Subject, Observer
 from manager.master.persistentDB import PersistentDB
-
 from client.messages import JobInfoMessage, JobStateChangeMessage, \
     JobFinMessage, JobFailMessage, JobBatchMessage, JobHistoryMessage, \
     JobAllResultsMessage, JobNewResultMessage, TaskOutputMessage
@@ -122,15 +121,36 @@ def job_to_jobInfoMsg(job: Job) -> JobInfoMessage:
     return JobInfoMessage(str(job.unique_id), job.jobid, task)
 
 
+# Helper functions
+list_async = toAsync(list)
+
+
 class TaskID:
+
+    SEPERATOR = "_"
+
+    def __init__(self, uid: str, bid: str) -> None:
+        self._ident = self.genFromStr(uid, bid)
+        self._unique = uid
+        self._bid = bid
+
+    def uniquePart(self) -> str:
+        return self._unique
+
+    def buildID(self) -> str:
+        return self._bid
 
     @staticmethod
     def gen(tid: str, job: Job) -> str:
-        return str(job.unique_id) + "_" + tid
+        return str(job.unique_id) + TaskID.SEPERATOR + tid
 
     @staticmethod
     def gen1(build: Build, job: Job) -> str:
-        return str(job.unique_id) + "_" + build.getIdent()
+        return str(job.unique_id) + TaskID.SEPERATOR + build.getIdent()
+
+    @staticmethod
+    def genFromStr(uid: str, tid: str) -> str:
+        return uid + TaskID.SEPERATOR + tid
 
 
 class JobMasterMsgSrc(MsgSource):
@@ -162,22 +182,14 @@ class JobMasterMsgSrc(MsgSource):
     async def query_history(self, args: List[str]) -> Optional[Message]:
         jobs = []  # type: List[Job]
 
-        jobs_history = await database_sync_to_async(
-            JobHistory.objects.all
-        )()
+        jobs_history = await toAsync(JobHistory.objects.all)()  # type: ignore
+        jobs_history_list = await list_async(jobs_history)
 
-        jobs_history_list = await database_sync_to_async(
-            list
-        )(jobs_history)
+        filterAsync = toAsync(TaskHistory.objects.filter)  # type: ignore
 
         for job in jobs_history_list:
-            task_history = await database_sync_to_async(
-                TaskHistory.objects.filter
-            )(jobhistory=job)
-
-            task_history_list = await database_sync_to_async(
-                list
-            )(task_history)
+            task_history = await filterAsync(jobhistory=job)
+            task_history_list = await list_async(task_history)
 
             tasks = {
                 t.task_name: task_gen_helper(t.task_name, t.state)
@@ -196,7 +208,10 @@ class JobMasterMsgSrc(MsgSource):
 
         # Retrieve from database
         ver_results = await JobHistory.jobHistory_transformation(
-            lambda job: VerResult(job.unique_id, job.job, job.filePath)
+            lambda job: VerResult(
+                str(job.unique_id),
+                str(job.job),
+                str(job.filePath))
         )
         if len(ver_results) == 0:
             return None
@@ -302,27 +317,25 @@ class JobMaster(Endpoint, Module, Subject, Observer):
 
     async def _job_record(self, job: Job) -> None:
         # Job record
-        job_db = await database_sync_to_async(
-            Jobs.objects.create
-        )(unique_id=job.unique_id, jobid=job.jobid, cmdid=job.cmd_id)
+        job_db = await toAsync(Jobs.objects.create)(  # type: ignore
+            unique_id=job.unique_id,
+            jobid=job.jobid,
+            cmdid=job.cmd_id)
 
         # Job info record
         infos = job.infos()
         for key in job.infos():
-            await database_sync_to_async(
-                JobInfos.objects.create
-            )(jobs=job_db, info_key=key,
-              info_value=infos[key])
+            await toAsync(JobInfos.objects.create)(  # type: ignore
+                jobs=job_db,
+                info_key=key,
+                info_value=infos[key])
 
     async def _job_record_rm(self, unique_id: str) -> None:
         # Remove Job from database
-        job_db = await database_sync_to_async(
-            Jobs.objects.filter
-        )(unique_id=unique_id)
+        job_db = await toAsync(Jobs.objects.filter)(  # type: ignore
+            unique_id=unique_id)
 
-        await database_sync_to_async(
-            job_db.delete
-        )()
+        await toAsync(job_db.delete)()
 
     def new_job(self, job: Job) -> None:
         self._loop.create_task(self.do_job(job))
@@ -390,9 +403,8 @@ class JobMaster(Endpoint, Module, Subject, Observer):
         async with self._lock:
 
             try:
-                info = await database_sync_to_async(
-                    Informations.objects.get
-                )(idx=0)
+                info = await toAsync(
+                    Informations.objects.get)(idx=0)  # type: ignore
 
                 job.set_unique_id(info.avail_job_id)
 
@@ -400,9 +412,7 @@ class JobMaster(Endpoint, Module, Subject, Observer):
                 # avail_job_id can grow up to 9223372036854775807,
                 # so it will no likely to overflow in normal scence.
                 info.avail_job_id += 1
-                await database_sync_to_async(
-                    info.save
-                )()
+                await toAsync(info.save)()
             except Exception:
                 traceback.print_exc()
 
@@ -412,17 +422,13 @@ class JobMaster(Endpoint, Module, Subject, Observer):
         previous boot time.
         """
 
-        jobs = await database_sync_to_async(
-            Jobs.objects.all
-        )()
+        jobs = await toAsync(Jobs.objects.all)()  # type: ignore
 
         # Is there some jobs that need to recover.
         if len(jobs) == 0:
             return
 
-        jobs = await database_sync_to_async(
-            jobs.order_by
-        )('-dateTime')
+        jobs = await toAsync(jobs.order_by)('-dateTime')
 
         for job in jobs:
             await self._do_job(job)
@@ -434,7 +440,7 @@ class JobMaster(Endpoint, Module, Subject, Observer):
 
         STATE should be str type.
         """
-        taskid, state = msg  # type: Tuple[str, str]
+        taskid, state = msg  # type: str, str
 
         unique_id = taskid.split("_")[0]
         taskid = taskid[taskid.find("_")+1:]
@@ -485,7 +491,7 @@ class JobMaster(Endpoint, Module, Subject, Observer):
 
         for t in job.tasks():
             # Create MetaInfo file for task
-            await database_sync_to_async(metaDB.create)(t.id())
+            await toAsync(metaDB.create)(t.id())
             metaDB.open(t.id())
 
     async def _log(self, message: str) -> None:
@@ -510,7 +516,7 @@ class JobMaster(Endpoint, Module, Subject, Observer):
                 revision=vsn,
                 build=build,
                 needPost='true',
-                extra={}
+                extra={"PostTarget": TaskID.gen(job.jobid, job)}
             )
             st.job = job
             job.addTask(build.getIdent(), st)
@@ -563,9 +569,7 @@ class JobMaster(Endpoint, Module, Subject, Observer):
             filePath=filePath
         )
 
-        await database_sync_to_async(
-            jobHistory.save
-        )()
+        await toAsync(jobHistory.save)()
 
         for task in job.tasks():
             taskHistory = TaskHistory(
@@ -573,9 +577,7 @@ class JobMaster(Endpoint, Module, Subject, Observer):
                 task_name=task_prefix_trim(task.id()),
                 state=task.taskState()
             )
-            await database_sync_to_async(
-                taskHistory.save
-            )()
+            await toAsync(taskHistory.save)()
 
     async def _job_maintain(self, jobid: str, state: str) -> None:
         """

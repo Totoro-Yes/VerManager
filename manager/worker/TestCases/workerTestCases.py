@@ -73,7 +73,7 @@ class VirtualServer_Minimal(VirtualServer):
 class WorkerTestCases_(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
-        self.sut = Worker("./manager/worker/config.yaml")
+        self.sut = Worker("./manager/misc/worker_test_configs/config.yaml")
 
     @unittest.skip("")
     async def test_Worker_Connect(self, ) -> None:

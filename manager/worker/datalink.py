@@ -61,6 +61,7 @@ async def binaryStore(dl: DataLink, bl: BinaryLetter,
         tid = bl.getTid()
         fileName = bl.getFileName()
         version = bl.getParent()
+        menu = bl.getMenu()
 
         if tid not in fds:
             # A new transfer file.

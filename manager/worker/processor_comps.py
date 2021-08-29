@@ -80,7 +80,7 @@ class UnitMaintainer(Daemon, ChannelReceiver, StateObject):
         self._restart_delay = delay
 
     async def _maintain(self, uid: str, info: typing.Dict) -> None:
-        state = info['state']
+        state = int(info['state'])
 
         if state == ProcUnit.STATE_DENY or \
            state == ProcUnit.STATE_STOP or \

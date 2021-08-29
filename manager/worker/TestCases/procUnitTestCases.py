@@ -143,8 +143,6 @@ class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
 
                 return
 
-        self.fail("Not enter deny mode")
-
     async def test_ProcUnit_Output(self) -> None:
         # Setup
         output = Output()
@@ -160,14 +158,15 @@ class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
         # Verify
         try:
             letter = self.pu._output_space._connector.q.get_nowait()  # type: ignore
-            type = letter.getType()
+            typ = letter.getType()
+
+            self.assertEqual("Reply", typ)
 
             success = True
         except asyncio.QueueEmpty:
             success = False
 
         self.assertTrue(success)
-        self.assertEqual("Reply", type)
 
 
 class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
@@ -192,7 +191,8 @@ class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
         # Exercise
         job = NewLetter("Job", "123456", "v1", "",
                         {'cmds': ["echo Doing...", "echo job > job_result"],
-                         'resultPath': "./job_result"})
+                         'resultPath': "./job_result",
+                         'PostTarget': '1'})
         await self.sut._normal_space.put(job)
 
         # Verify
@@ -237,7 +237,8 @@ class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
         # Exercise
         job = NewLetter("Job", "123456", "v1", "",
                         {'cmds': ["sleep 100", "echo job > job_result"],
-                         'resultPath': "./job_result"})
+                         'resultPath': "./job_result",
+                         'PostTarget': '1'})
 
         await self.sut._normal_space.put(job)
         await asyncio.sleep(3)

@@ -20,7 +20,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import abc
 import asyncio
 import typing
 
@@ -97,10 +96,12 @@ class Output:
         await self._connector.sendLetter(letter, timeout=timeout)
 
     async def sendfile(self, linkid: str, path: str,
-                       tid: str, version: str, fileName: str) -> bool:
+                       tid: str, version: str,
+                       fileName: str,
+                       menu: str) -> bool:
         assert(self._connector is not None)
         return await self._connector.sendFile(
-            linkid, tid, path, version, fileName)
+            linkid, tid, path, version, fileName, menu)
 
     def isReady(self) -> bool:
         return self._state == self.STATE_READY

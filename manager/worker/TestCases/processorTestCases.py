@@ -107,4 +107,5 @@ class ProcessorTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Verify
         info = self.sut.unitInfo("Unit")
-        self.assertGreater(1, info['failureCount'])
+        self.assertIsNotNone(info)
+        self.assertGreater(1, int(info['failureCount']))  # type: ignore

@@ -196,7 +196,7 @@ class EventListener(ModuleDaemon, Subject, Observer):
 
     async def _doStop(self) -> None:
         for ident in self._entries:
-            self.stopEntry(ident)
+            await self.stopEntry(ident)
 
     def needStop(self) -> bool:
         return self._stop
@@ -241,9 +241,9 @@ class EventListener(ModuleDaemon, Subject, Observer):
         if ident in self._entries:
             del self._entries[ident]
 
-    def stopEntry(self, ident: str) -> None:
+    async def stopEntry(self, ident: str) -> None:
         if ident in self._entries:
-            self._entries[ident].stop()
+            await self._entries[ident].stop()
 
     async def run(self) -> None:
 
