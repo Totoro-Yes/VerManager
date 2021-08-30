@@ -719,10 +719,7 @@ class PostProcUnit(PostProcUnitProto):
 
         tid = letter.getTid()
         version = letter.getParent()
-
-        # Make target post's ident via
-        # merge unique_id with version's ident
-        post_ident = tid.split("_")[0] + "_" + version
+        post_ident = letter.getMenu()
 
         if post_ident not in self._posts:
             return
