@@ -314,6 +314,7 @@ class JobMaster(Endpoint, Module, Subject, Observer):
         )()
 
     def new_job(self, job: Job) -> None:
+        print("New Job Arrived")
         self._loop.create_task(self.do_job(job))
 
     async def do_job(self, job: Job) -> None:
