@@ -282,10 +282,12 @@ async def responseHandler_ResultStore(
         )
     except POSTPROC_NO_HANDLERS_MATCH_WITH_THE_KEY:
         # This task no need to do post proc
-        task.job.job_result = path
+        task.job.job_result = job_result_url(
+            str(task.job.unique_id), path)
 
 
-def job_result_url(unique_id: str, fileName: str) -> str:
+def job_result_url(unique_id: str, path: str) -> str:
+    fileName = path.split("/")[-1]
     may_slash = "" if DATA_URL[-1] == '/' else "/"
     return DATA_URL + may_slash + unique_id + "/" + fileName
 

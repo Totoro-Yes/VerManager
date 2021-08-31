@@ -42,17 +42,18 @@ async def doc_gen(
                 table.append(["N/A", "N/A", line])
                 continue
 
-            iid = search.group()[1:]
-
-            with ThreadPoolExecutor() as e:
-                issue = await asyncio.get_running_loop()\
-                            .run_in_executor(e, issue_fetch, iid)
-
             try:
+                iid = search.group()[1:]
+
+                with ThreadPoolExecutor() as e:
+                    issue = await asyncio.get_running_loop()\
+                                .run_in_executor(e, issue_fetch, iid)
+
                 table.append(
                     data_fetch(iid, issue)
                 )
             except Exception:
+                import traceback; traceback.print_exc()
                 # Cleanup and raise an excepiton to notify
                 # upper component.
                 changelogfile.close()
@@ -97,16 +98,19 @@ def wtd_description_extract(bs: BeautifulSoup) -> str:
     if len(headers) != 1:
         return "N/A"
 
-    desc_maybe = headers[0].findNextSibling().getText()
-    desc_maybe = desc_maybe.strip()
-    pos = desc_maybe.find("\n")
+    try:
+        desc_maybe = headers[0].findNextSibling().getText()
+        desc_maybe = desc_maybe.strip()
+        pos = desc_maybe.find("\n")
 
-    if pos != -1:
-        desc_maybe = desc_maybe[pos+1:]
+        if pos != -1:
+            desc_maybe = desc_maybe[pos+1:]
 
-    if re.match("wtd(-|.)*", desc_maybe) is None:
-        return desc_maybe
-    else:
+        if re.match("wtd(-|.)*", desc_maybe) is None:
+            return desc_maybe
+        else:
+            return "N/A"
+    except Exception:
         return "N/A"
 
 
@@ -124,7 +128,10 @@ def wtd_no_extract_within_header(header: str, bs) -> str:
     if len(headers) != 1:
         return "N/A"
 
-    return headers[0].findNextSibling().find('a').getText()
+    try:
+        return headers[0].findNextSibling().find('a').getText()
+    except Exception:
+        return "N/A"
 
 
 def related_field_get(bs: BeautifulSoup) -> T.Any:
