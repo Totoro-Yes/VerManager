@@ -1531,6 +1531,7 @@ class VerGenComponent {
     }
     generate(version, ...infos) {
         let buildInfo = {};
+        console.log("Generate");
         if (typeof version !== 'undefined') {
             if (infos.length === 2) {
                 buildInfo = { logFrom: infos[0], logTo: infos[1] };
