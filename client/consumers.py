@@ -61,6 +61,9 @@ class CommuConsumer(AsyncWebsocketConsumer):
 
         try:
             event = ClientEvent(text_data)
+            print(event)
+            import sys
+            sys.stdout.flush()
             replies = await ClientEventProcessor.proc(event)
             if replies is None:
                 raise FAILED_TO_QUERY()
