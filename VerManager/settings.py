@@ -165,7 +165,7 @@ USE_TZ = True
 DATA_URL = '/data/'
 STATIC_URL = '/static/'
 STATICFILES_DIRS = (
-    '/home/ayden/Codebase/VerManager/static/',
+    '/var/www/vermanager/static/',
 )
 
 REQUIRE_BASE_URL = "./"
