@@ -28,7 +28,7 @@ DEBUG = True
 HOST = os.environ.get('ALLOWED_HOST')
 if HOST is None:
     HOST = 'localhost'
-ALLOWED_HOSTS = [HOST]
+ALLOWED_HOSTS = [HOST, "127.0.0.1"]
 
 
 # Application definition
@@ -54,6 +54,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 
 ROOT_URLCONF = 'VerManager.urls'
