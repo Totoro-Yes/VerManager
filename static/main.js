@@ -1787,6 +1787,7 @@ class JobHistoryComponent {
         this.current_open_message = [];
         this.msg_service.register(msg => msg.type == "job.msg.history")
             .subscribe(history_msg => {
+            console.log(history_msg);
             this.history_msg_handle(history_msg);
         });
     }
