@@ -166,6 +166,7 @@ DATA_URL = '/data/'
 STATIC_URL = '/static/'
 STATICFILES_DIRS = (
     '/var/www/vermanager/static/',
+    '/var/www/vermanager/data/'
 )
 
 REQUIRE_BASE_URL = "./"
