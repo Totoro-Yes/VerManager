@@ -1,4 +1,4 @@
-CHCP 936
+CHCP 65001
 
 try {
     Invoke-Expression $args[0]
