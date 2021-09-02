@@ -67,6 +67,12 @@ class CommandExecutor:
         self._last_active = datetime.utcnow()
 
         command_str = packShellCommands(self._cmds)
+
+        # Debug
+        print(command_str)
+        import sys
+        sys.stdout.flush()
+
         ref = execute_shell(
             command_str,
             stdout=subprocess.PIPE,
