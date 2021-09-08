@@ -23,6 +23,7 @@
 import asyncio
 import traceback
 import manager.master.configs as config
+from datetime import datetime
 from functools import reduce
 from manager.models import Jobs, JobInfos, Informations, \
     JobHistory, TaskHistory
@@ -152,7 +153,7 @@ class JobMasterMsgSrc(MsgSource):
         jobs = []  # type: List[Job]
 
         jobs_history = await database_sync_to_async(
-            JobHistory.objects.all
+            JobHistory.objects.all  # type: ignore
         )()
 
         jobs_history_list = await database_sync_to_async(
@@ -161,7 +162,7 @@ class JobMasterMsgSrc(MsgSource):
 
         for job in jobs_history_list:
             task_history = await database_sync_to_async(
-                TaskHistory.objects.filter
+                TaskHistory.objects.filter  # type: ignore
             )(jobhistory=job)
 
             task_history_list = await database_sync_to_async(
@@ -185,7 +186,7 @@ class JobMasterMsgSrc(MsgSource):
 
         # Retrieve from database
         ver_results = await JobHistory.jobHistory_transformation(
-            lambda job: VerResult(job.unique_id, job.job, job.filePath)
+            lambda job: VerResult(job.unique_id, job.job, job.filePath)  # type: ignore
         )
         if len(ver_results) == 0:
             return None
@@ -292,21 +293,21 @@ class JobMaster(Endpoint, Module, Subject, Observer):
     async def _job_record(self, job: Job) -> None:
         # Job record
         job_db = await database_sync_to_async(
-            Jobs.objects.create
+            Jobs.objects.create  # type: ignore
         )(unique_id=job.unique_id, jobid=job.jobid, cmdid=job.cmd_id)
 
         # Job info record
         infos = job.infos()
         for key in job.infos():
             await database_sync_to_async(
-                JobInfos.objects.create
+                JobInfos.objects.create  # type: ignore
             )(jobs=job_db, info_key=key,
               info_value=infos[key])
 
     async def _job_record_rm(self, unique_id: str) -> None:
         # Remove Job from database
         job_db = await database_sync_to_async(
-            Jobs.objects.filter
+            Jobs.objects.filter  # type: ignore
         )(unique_id=unique_id)
 
         await database_sync_to_async(
@@ -380,7 +381,7 @@ class JobMaster(Endpoint, Module, Subject, Observer):
 
             try:
                 info = await database_sync_to_async(
-                    Informations.objects.get
+                    Informations.objects.get  # type: ignore
                 )(idx=0)
 
                 job.set_unique_id(info.avail_job_id)
@@ -402,7 +403,7 @@ class JobMaster(Endpoint, Module, Subject, Observer):
         """
 
         jobs = await database_sync_to_async(
-            Jobs.objects.all
+            Jobs.objects.all  # type: ignore
         )()
 
         # Is there some jobs that need to recover.
@@ -423,7 +424,7 @@ class JobMaster(Endpoint, Module, Subject, Observer):
 
         STATE should be str type.
         """
-        taskid, state = msg  # type: Tuple[str, str]
+        taskid, state = msg
 
         unique_id = taskid.split("_")[0]
         taskid = taskid[taskid.find("_")+1:]
@@ -488,9 +489,14 @@ class JobMaster(Endpoint, Module, Subject, Observer):
         if sn is None or vsn is None:
             raise Job_Bind_Failed()
 
+        # Get date
+        date_ = job.getExtra('datetime')
+        if date_ is None:
+            date_ = str(datetime.now())
+
         for build in bs.getBuilds():
             # Command Preprocessing
-            build_preprocessing(build, [("<version>", vsn)])
+            build_preprocessing(build, [("<version>", vsn), ("<datetime>", date_)])
 
             st = SingleTask(
                 prepend_prefix(str(job.unique_id), build.getIdent()),
