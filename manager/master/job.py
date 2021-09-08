@@ -46,6 +46,7 @@ class Job:
         self.result = None  # type: Any
         # This Dict used by
         self.tasks_record = {}  # type: Dict[str, str]
+        self.extra = {}  # type: Dict[str, str]
 
     def is_valid(self) -> bool:
         return len(self.jobid) > 0 and \
@@ -92,6 +93,8 @@ class Job:
         Format:
         <JobId>,<CmdId>::=<TaskID_1>:<TaskID_2>:...:<TaskID_n>
         """
+        tasks_str = ""
+
         if len(self._tasks) > 0:
             tasks_str = ":".join([
                 t.id()+","+Task.STATE_STR_MAPPING[t.taskState()]

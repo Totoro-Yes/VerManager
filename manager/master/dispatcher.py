@@ -36,7 +36,6 @@ from manager.master.taskTracker import TaskTracker
 from manager.master.workerRoom import WorkerRoom
 from manager.basic.endpoint import Endpoint
 
-
 M_NAME = "Dispatcher"
 
 WaitAreaSpec = namedtuple('WaitAreaSpec', ['task_type', 'pri', 'num'])

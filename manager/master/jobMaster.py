@@ -39,11 +39,9 @@ from manager.master.job import VerResult
 from manager.basic.mmanager import Module
 from manager.basic.observer import Subject, Observer
 from manager.master.persistentDB import PersistentDB
-
 from client.messages import JobInfoMessage, JobStateChangeMessage, \
     JobFinMessage, JobFailMessage, JobBatchMessage, JobHistoryMessage, \
     JobAllResultsMessage, JobNewResultMessage, TaskOutputMessage
-
 from manager.master.msgCell import MsgSource
 from client.messages import Message
 
@@ -332,6 +330,7 @@ class JobMaster(Endpoint, Module, Subject, Observer):
             # so assume that task_prefix_trim must not
             # return None.
             tasks = []  # type: List[List[str]]
+
             for t in job.tasks():
                 id = cast(str, task_prefix_trim(t.id()))
                 state = Task.STATE_STR_MAPPING[t.taskState()]
