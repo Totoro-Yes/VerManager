@@ -23,6 +23,8 @@
 import asyncio
 import traceback
 import manager.master.configs as config
+from manager.basic.macros import MACRO_DATETIEM, MACRO_EXTRA, MACRO_VER
+from datetime import datetime
 from functools import reduce
 from manager.models import Jobs, JobInfos, Informations, \
     JobHistory, TaskHistory
@@ -76,7 +78,7 @@ def task_gen_helper(id: str, state: str) -> Task:
 
 
 def command_var_replace(cmds: List[str],
-                        vars: List[Tuple[str, str]]) -> List[str]:
+                        vars: List[List[str]]) -> List[str]:
     trans = []  # type: List[str]
     for cmd in cmds:
         trans.append(
@@ -91,7 +93,7 @@ def command_path_format_transform(cmds: List[str]) -> List[str]:
 
 
 def command_preprocessing(cmds: List[str],
-                          vars: List[Tuple[str, str]]) -> List[str]:
+                          vars: List[List[str]]) -> List[str]:
     # Replace variables
     cmds = command_var_replace(cmds, vars)
     # Make sure all command use "/" as path seperator.
@@ -100,7 +102,7 @@ def command_preprocessing(cmds: List[str],
     return cmds
 
 
-def build_preprocessing(build: Build, vars: List[Tuple[str, str]]) -> None:
+def build_preprocessing(build: Build, vars: List[List[str]]) -> None:
     cmds = build.getCmd()
     build.setCmd(command_preprocessing(cmds, vars))
     output = build.getOutput()
@@ -150,7 +152,7 @@ class JobMasterMsgSrc(MsgSource):
         jobs = []  # type: List[Job]
 
         jobs_history = await database_sync_to_async(
-            JobHistory.objects.all
+            JobHistory.objects.all  # type: ignore
         )()
 
         jobs_history_list = await database_sync_to_async(
@@ -159,7 +161,7 @@ class JobMasterMsgSrc(MsgSource):
 
         for job in jobs_history_list:
             task_history = await database_sync_to_async(
-                TaskHistory.objects.filter
+                TaskHistory.objects.filter  # type: ignore
             )(jobhistory=job)
 
             task_history_list = await database_sync_to_async(
@@ -183,7 +185,7 @@ class JobMasterMsgSrc(MsgSource):
 
         # Retrieve from database
         ver_results = await JobHistory.jobHistory_transformation(
-            lambda job: VerResult(job.unique_id, job.job, job.filePath)
+            lambda job: VerResult(job.unique_id, job.job, job.filePath)  # type: ignore
         )
         if len(ver_results) == 0:
             return None
@@ -290,21 +292,21 @@ class JobMaster(Endpoint, Module, Subject, Observer):
     async def _job_record(self, job: Job) -> None:
         # Job record
         job_db = await database_sync_to_async(
-            Jobs.objects.create
+            Jobs.objects.create  # type: ignore
         )(unique_id=job.unique_id, jobid=job.jobid, cmdid=job.cmd_id)
 
         # Job info record
         infos = job.infos()
         for key in job.infos():
             await database_sync_to_async(
-                JobInfos.objects.create
+                JobInfos.objects.create  # type: ignore
             )(jobs=job_db, info_key=key,
               info_value=infos[key])
 
     async def _job_record_rm(self, unique_id: str) -> None:
         # Remove Job from database
         job_db = await database_sync_to_async(
-            Jobs.objects.filter
+            Jobs.objects.filter  # type: ignore
         )(unique_id=unique_id)
 
         await database_sync_to_async(
@@ -380,7 +382,7 @@ class JobMaster(Endpoint, Module, Subject, Observer):
 
             try:
                 info = await database_sync_to_async(
-                    Informations.objects.get
+                    Informations.objects.get  # type: ignore
                 )(idx=0)
 
                 job.set_unique_id(info.avail_job_id)
@@ -402,7 +404,7 @@ class JobMaster(Endpoint, Module, Subject, Observer):
         """
 
         jobs = await database_sync_to_async(
-            Jobs.objects.all
+            Jobs.objects.all  # type: ignore
         )()
 
         # Is there some jobs that need to recover.
@@ -423,7 +425,7 @@ class JobMaster(Endpoint, Module, Subject, Observer):
 
         STATE should be str type.
         """
-        taskid, state = msg  # type: Tuple[str, str]
+        taskid, state = msg
 
         unique_id = taskid.split("_")[0]
         taskid = taskid[taskid.find("_")+1:]
@@ -484,13 +486,29 @@ class JobMaster(Endpoint, Module, Subject, Observer):
         bs = BuildSet(cmd)
 
         # Build SingleTask
-        sn, vsn = job.get_info('sn'), job.get_info('vsn')
-        if sn is None or vsn is None:
-            raise Job_Bind_Failed()
+        sn = job.get_info('sn')
+        vsn = job.get_info('vsn')
+        extra = job.get_info('extra')
+
+        assert(sn is not None and vsn is not None)
+
+        # Get date
+        date_ = str(datetime.now())
 
         for build in bs.getBuilds():
+
             # Command Preprocessing
-            build_preprocessing(build, [("<version>", vsn)])
+            build_preprocessing(build, [
+                [MACRO_VER, vsn],
+                [MACRO_DATETIEM, date_],
+            ])
+
+            if extra is not None:
+                build_preprocessing(build, [[MACRO_EXTRA, extra]])
+
+
+            print(build.getCmdStr());
+
 
             st = SingleTask(
                 prepend_prefix(str(job.unique_id), build.getIdent()),
@@ -508,7 +526,7 @@ class JobMaster(Endpoint, Module, Subject, Observer):
                      for build in bs.getBuilds()]
 
         merge_command = bs.getMerge()
-        build_preprocessing(merge_command.getBuild(), [("<version>", vsn)])
+        build_preprocessing(merge_command.getBuild(),[["<version>", vsn]])
 
         pt = PostTask(
             prepend_prefix(str(job.unique_id), job.jobid),

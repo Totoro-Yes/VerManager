@@ -88,6 +88,9 @@ class Job:
 
         return True
 
+    def getExtra(self, key:str) -> Optional[str]:
+        return self._extra.get(key, None)
+
     def __str__(self) -> str:
         """
         Format:

@@ -21,7 +21,7 @@
 # SOFTWARE.
 
 import manager.master.configs as cfg
-from typing import cast
+from typing import cast, Union, Dict
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.http import HttpResponseNotModified
 from django.views.decorators.csrf import csrf_exempt
@@ -48,18 +48,18 @@ from .models import Revisions, Versions, JobHistory
 
 # Create your views here.
 class VersionViewSet(viewsets.ModelViewSet):
-    queryset = Versions.objects.all()
+    queryset = Versions.objects.all()  # type: ignore
     serializer_class = VersionSerializer
 
     @action(detail=False, methods=['post'])
-    def register(self, request) -> Response:
+    def register(self, request) -> Union[Response, HttpResponseBadRequest]:
         try:
             serializer = VersionInfoSerializer(data=request.data)
 
             if not serializer.is_valid():
                 return HttpResponseBadRequest()
 
-            vers = Versions.objects.filter(vsn=serializer.data['vsn'])
+            vers = Versions.objects.filter(vsn=serializer.data['vsn'])  # type: ignore
             if list(vers) == []:
                 newVer = Versions(
                     vsn=serializer.data['vsn'],
@@ -77,14 +77,15 @@ class VersionViewSet(viewsets.ModelViewSet):
         return Response(serilizer.date)
 
     @action(detail=False, methods=['put'])
-    def ver_update(self, request) -> Response:
+    def ver_update(self, request) -> Union[Response, HttpResponseBadRequest]:
         try:
             serializer_data = VersionInfoSerializer(data=request.data)
 
             if not serializer_data.is_valid():
                 return HttpResponseBadRequest()
 
-            ver = Versions.objects.get(vsn__exact=serializer_data.data['vsn'])
+            ver = Versions.objects.get(  # type: ignore
+                vsn__exact=serializer_data.data['vsn'])
             ver.sn = serializer_data.data['sn']
             ver.save()
 
@@ -94,9 +95,9 @@ class VersionViewSet(viewsets.ModelViewSet):
         return Response()
 
     @action(detail=True, methods=['delete'])
-    def delete(self, request, pk=None) -> Response:
+    def delete(self, request, pk=None) -> Union[Response, HttpResponseBadRequest]:
         try:
-            theVersion = Versions.objects.get(pk=pk)
+            theVersion = Versions.objects.get(pk=pk)  # type: ignore
             theVersion.delete()
         except ObjectDoesNotExist:
             return HttpResponseBadRequest()
@@ -104,27 +105,32 @@ class VersionViewSet(viewsets.ModelViewSet):
         return Response()
 
     @action(detail=True, methods=['put'])
-    def generate(self, request, pk=None) -> Response:
+    def generate(self, request, pk=None) -> Union[Response, HttpResponseBadRequest]:
 
         assert(cfg.config is not None)
 
         if len(request.data) == 0:
-            extra = {}
+            extra_info = ""
         else:
             generate_info = BuildInfoSerializer(data=request.data)
             if not generate_info.is_valid():
-                return HttpResponseBadRequest("Generate info is not valid")
+                return HttpResponseBadRequest(
+                    "Generate info is not valid")
 
-            extra = generate_info.data
+            extra_info = generate_info.data.get('extra', None)
+            if extra_info is None:
+                extra_info = ""
 
         try:
-            version = Versions.objects.get(pk=pk)
+            version = Versions.objects.get(pk=pk)  # type: ignore
         except ObjectDoesNotExist:
-            return HttpResponseBadRequest("Version does not exists.")
+            return HttpResponseBadRequest(
+                "Version does not exists.")
 
         job = Job(pk, "GL8900", {
             'vsn': pk,
-            'sn': version.sn
+            'sn': version.sn,
+            'extra': extra_info
         })
 
         assert(S.ServerInstance is not None)
@@ -135,11 +141,13 @@ class VersionViewSet(viewsets.ModelViewSet):
 
 
 class RevisionViewSet(viewsets.ModelViewSet):
-    queryset = Revisions.objects.all().order_by('-dateTime')
+    queryset = Revisions.objects.all().order_by('-dateTime')  # type: ignore
     serializer_class = RevisionSerializer
 
     @action(detail=True, methods=['get'])
-    def getSomeRevsFrom(self, request, pk=None) -> Response:
+    def getSomeRevsFrom(self, request, pk=None) -> \
+            Union[HttpResponseNotModified, Response, HttpResponseBadRequest]:
+
         try:
             num = int(request.query_params['num'])
             if num == 0:
@@ -148,7 +156,7 @@ class RevisionViewSet(viewsets.ModelViewSet):
             return HttpResponseBadRequest()
 
         beginRev = self.get_object()
-        revs = Revisions.objects.order_by('-dateTime').\
+        revs = Revisions.objects.order_by('-dateTime'). \
             filter(dateTime__lt=beginRev.dateTime)
         revs.order_by('-dateTime')
 
@@ -192,7 +200,7 @@ def verManagerPage(request):
 def newRev(request):
     assert(S.ServerInstance is not None)
 
-    revSync = cast(JobMaster, S.ServerInstance.getModule(RS_M_NAME))
+    revSync = cast(RevSync, S.ServerInstance.getModule(RS_M_NAME))
     revSync.revNewPush(request)
 
     return HttpResponse()
