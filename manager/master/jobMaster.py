@@ -23,6 +23,7 @@
 import asyncio
 import traceback
 import manager.master.configs as config
+from manager.basic.macros import MACRO_DATETIEM, MACRO_EXTRA, MACRO_VER
 from datetime import datetime
 from functools import reduce
 from manager.models import Jobs, JobInfos, Informations, \
@@ -79,7 +80,7 @@ def task_gen_helper(id: str, state: str) -> Task:
 
 
 def command_var_replace(cmds: List[str],
-                        vars: List[Tuple[str, str]]) -> List[str]:
+                        vars: List[List[str]]) -> List[str]:
     trans = []  # type: List[str]
     for cmd in cmds:
         trans.append(
@@ -94,7 +95,7 @@ def command_path_format_transform(cmds: List[str]) -> List[str]:
 
 
 def command_preprocessing(cmds: List[str],
-                          vars: List[Tuple[str, str]]) -> List[str]:
+                          vars: List[List[str]]) -> List[str]:
     # Replace variables
     cmds = command_var_replace(cmds, vars)
     # Make sure all command use "/" as path seperator.
@@ -103,7 +104,7 @@ def command_preprocessing(cmds: List[str],
     return cmds
 
 
-def build_preprocessing(build: Build, vars: List[Tuple[str, str]]) -> None:
+def build_preprocessing(build: Build, vars: List[List[str]]) -> None:
     cmds = build.getCmd()
     build.setCmd(command_preprocessing(cmds, vars))
     output = build.getOutput()
@@ -485,18 +486,29 @@ class JobMaster(Endpoint, Module, Subject, Observer):
         bs = BuildSet(cmd)
 
         # Build SingleTask
-        sn, vsn = job.get_info('sn'), job.get_info('vsn')
-        if sn is None or vsn is None:
-            raise Job_Bind_Failed()
+        sn = job.get_info('sn')
+        vsn = job.get_info('vsn')
+        extra = job.get_info('extra')
+
+        assert(sn is not None and vsn is not None)
 
         # Get date
-        date_ = job.getExtra('datetime')
-        if date_ is None:
-            date_ = str(datetime.now())
+        date_ = str(datetime.now())
 
         for build in bs.getBuilds():
+
             # Command Preprocessing
-            build_preprocessing(build, [("<version>", vsn), ("<datetime>", date_)])
+            build_preprocessing(build, [
+                [MACRO_VER, vsn],
+                [MACRO_DATETIEM, date_],
+            ])
+
+            if extra is not None:
+                build_preprocessing(build, [[MACRO_EXTRA, extra]])
+
+
+            print(build.getCmdStr());
+
 
             st = SingleTask(
                 prepend_prefix(str(job.unique_id), build.getIdent()),
@@ -514,7 +526,7 @@ class JobMaster(Endpoint, Module, Subject, Observer):
                      for build in bs.getBuilds()]
 
         merge_command = bs.getMerge()
-        build_preprocessing(merge_command.getBuild(), [("<version>", vsn)])
+        build_preprocessing(merge_command.getBuild(),[["<version>", vsn]])
 
         pt = PostTask(
             prepend_prefix(str(job.unique_id), job.jobid),

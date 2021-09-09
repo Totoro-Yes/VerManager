@@ -50,5 +50,4 @@ class VersionInfoSerializer(serializers.Serializer):
 
 
 class BuildInfoSerializer(serializers.Serializer):
-    logFrom = serializers.CharField(max_length=60)
-    logTo = serializers.CharField(max_length=60)
+    extra = serializers.CharField(max_length=60)
