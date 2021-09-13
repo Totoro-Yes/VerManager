@@ -21,7 +21,6 @@
 # SOFTWARE.
 
 import asyncio
-import traceback
 import manager.master.configs as config
 from manager.basic.macros import MACRO_DATETIEM, MACRO_EXTRA, MACRO_VER
 from datetime import datetime
@@ -264,10 +263,6 @@ class JobMaster(Endpoint, Module, Subject, Observer):
         # Observer init
         Observer.__init__(self)
 
-        # Lock to prevent race conditon of
-        # unique id access.
-        self._lock = asyncio.Lock()
-
     async def begin(self) -> None:
         return
 
@@ -380,37 +375,10 @@ class JobMaster(Endpoint, Module, Subject, Observer):
         Read the available unique id from DB then
         assign it to Job and update DB.
         """
-        async with self._lock:
-            jobid = await self._jobid_plus()
-            if jobid is None:
-                raise UNIQUE_ID_FAILED_TO_UPDATE()
-            job.set_unique_id(jobid)
-
-    async def _jobid_plus(self) -> Optional[int]:
-        """
-        Plus unique id by 1 and return the old value.
-        """
-        async with self._lock:
-
-            try:
-                info = await database_sync_to_async(
-                    Informations.objects.get  # type: ignore
-                )(idx=0)
-
-                old_id = info.avail_job_id
-
-                # Update unique id
-                # avail_job_id can grow up to 9223372036854775807,
-                # so it will no likely to overflow in normal scence.
-                info.avail_job_id += 1
-                await database_sync_to_async(
-                    info.save
-                )()
-
-                return old_id
-
-            except Exception:
-                return None
+        jobid = await Informations.jobid_plus()
+        if jobid is None:
+            raise UNIQUE_ID_FAILED_TO_UPDATE()
+        job.set_unique_id(jobid)
 
     async def _recovery(self) -> None:
         """

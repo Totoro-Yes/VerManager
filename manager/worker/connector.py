@@ -25,7 +25,6 @@ import typing
 import platform
 import traceback
 import manager.worker.configs as cfg
-
 from datetime import datetime
 from manager.basic.letter import BinaryLetter, sending_sock
 from socket import socket
@@ -277,12 +276,19 @@ class Linker:
         First, open a datalink to target then transfer file.
         """
         assert(cfg.config is not None)
+
+        address = {}
+
         if linkid == 'Master':
             address = cfg.config.getConfig('MASTER_ADDRESS')
         elif linkid == 'Poster':
             address = cfg.config.getConfig('MERGER_ADDRESS')
+
+        assert(address != {})
+
         r, w = await asyncio.open_connection(
             address['host'], address['dataPort'])
+
         sock = w.transport.get_extra_info('socket')
         try:
             with ProcessPoolExecutor() as e:
