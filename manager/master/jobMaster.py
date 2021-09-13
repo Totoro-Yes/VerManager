@@ -31,7 +31,9 @@ from manager.models import Jobs, JobInfos, Informations, \
 from typing import Dict, Any, Tuple, Optional, cast, List
 from manager.master.dispatcher import Dispatcher, M_NAME as D_M_NAME
 from manager.master.job import Job
-from manager.master.exceptions import Job_Command_Not_Found, Job_Bind_Failed
+from manager.master.exceptions import Job_Command_Not_Found, \
+    Job_Bind_Failed, \
+    UNIQUE_ID_FAILED_TO_UPDATE
 from manager.master.build import Build, BuildSet
 from manager.master.task import SingleTask, PostTask, Task
 from manager.basic.endpoint import Endpoint
@@ -379,13 +381,23 @@ class JobMaster(Endpoint, Module, Subject, Observer):
         assign it to Job and update DB.
         """
         async with self._lock:
+            jobid = await self._jobid_plus()
+            if jobid is None:
+                raise UNIQUE_ID_FAILED_TO_UPDATE()
+            job.set_unique_id(jobid)
+
+    async def _jobid_plus(self) -> Optional[int]:
+        """
+        Plus unique id by 1 and return the old value.
+        """
+        async with self._lock:
 
             try:
                 info = await database_sync_to_async(
                     Informations.objects.get  # type: ignore
                 )(idx=0)
 
-                job.set_unique_id(info.avail_job_id)
+                old_id = info.avail_job_id
 
                 # Update unique id
                 # avail_job_id can grow up to 9223372036854775807,
@@ -394,8 +406,11 @@ class JobMaster(Endpoint, Module, Subject, Observer):
                 await database_sync_to_async(
                     info.save
                 )()
+
+                return old_id
+
             except Exception:
-                traceback.print_exc()
+                return None
 
     async def _recovery(self) -> None:
         """

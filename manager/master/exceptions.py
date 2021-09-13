@@ -123,6 +123,12 @@ class UNABLE_TO_CREATE_META_FILE(Exception):
             + self.jobid + "," + self.taskid + ")"
 
 
+class UNIQUE_ID_FAILED_TO_UPDATE(Exception):
+
+    def __str__(self) -> str:
+        return "JobMaster failed to update unique id"
+
+
 ###############################################################################
 #                                 PersistentDB                                #
 ###############################################################################
