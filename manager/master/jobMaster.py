@@ -379,7 +379,6 @@ class JobMaster(Endpoint, Module, Subject, Observer):
         jobid = await database_sync_to_async(
             Informations.jobid_plus)()
 
-        print("JOBID is \n")
         if jobid is None:
             raise UNIQUE_ID_FAILED_TO_UPDATE()
         job.set_unique_id(jobid)
