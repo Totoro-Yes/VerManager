@@ -20,9 +20,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from typing import List, Callable, Any
+import asyncio
+from typing import List, Callable, Any, Optional
 
-from django.db import connections
+from django.db import connections, transaction
 from django.db import models
 from django.utils import timezone
 from django.db import connection
@@ -42,14 +43,33 @@ class Informations(models.Model):
     avail_job_id = models.BigIntegerField()
 
     @classmethod
-    async def init(self) -> None:
-        infos = self.objects.all()
+    async def init(cls) -> None:
+        infos = cls.objects.all()  # type: ignore
 
         if await database_sync_to_async(len)(infos) == 0:
             info = Informations(idx=0, avail_job_id=1)
             await database_sync_to_async(
                 info.save
             )()
+
+    @classmethod
+    def jobid_plus(cls) -> Optional[int]:
+        with transaction.atomic():
+            try:
+                info = Informations.objects.get(idx=0)
+
+                old_id = info.avail_job_id
+
+                # Update unique id
+                # avail_job_id can grow up to 9223372036854775807,
+                # so it will no likely to overflow in normal scence.
+                info.avail_job_id += 1
+                info.save()
+
+                return old_id
+
+            except Exception:
+                return None
 
 
 class Revisions(models.Model):

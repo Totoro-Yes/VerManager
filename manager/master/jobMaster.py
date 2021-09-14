@@ -21,8 +21,8 @@
 # SOFTWARE.
 
 import asyncio
-import traceback
 import manager.master.configs as config
+from manager.basic.macros import macros_trans
 from manager.basic.macros import MACRO_DATETIEM, MACRO_EXTRA, MACRO_VER
 from datetime import datetime
 from functools import reduce
@@ -31,7 +31,9 @@ from manager.models import Jobs, JobInfos, Informations, \
 from typing import Dict, Any, Tuple, Optional, cast, List
 from manager.master.dispatcher import Dispatcher, M_NAME as D_M_NAME
 from manager.master.job import Job
-from manager.master.exceptions import Job_Command_Not_Found, Job_Bind_Failed
+from manager.master.exceptions import Job_Command_Not_Found, \
+    Job_Bind_Failed, \
+    UNIQUE_ID_FAILED_TO_UPDATE
 from manager.master.build import Build, BuildSet
 from manager.master.task import SingleTask, PostTask, Task
 from manager.basic.endpoint import Endpoint
@@ -46,6 +48,7 @@ from client.messages import JobInfoMessage, JobStateChangeMessage, \
     JobAllResultsMessage, JobNewResultMessage, TaskOutputMessage
 from manager.master.msgCell import MsgSource
 from client.messages import Message
+from manager.basic.util import datetime_format
 
 
 JobCommandPrefix = "JOB_COMMAND_"
@@ -260,10 +263,6 @@ class JobMaster(Endpoint, Module, Subject, Observer):
         # Observer init
         Observer.__init__(self)
 
-        # Lock to prevent race conditon of
-        # unique id access.
-        self._lock = asyncio.Lock()
-
     async def begin(self) -> None:
         return
 
@@ -378,24 +377,12 @@ class JobMaster(Endpoint, Module, Subject, Observer):
         Read the available unique id from DB then
         assign it to Job and update DB.
         """
-        async with self._lock:
+        jobid = await database_sync_to_async(
+            Informations.jobid_plus)()
 
-            try:
-                info = await database_sync_to_async(
-                    Informations.objects.get  # type: ignore
-                )(idx=0)
-
-                job.set_unique_id(info.avail_job_id)
-
-                # Update unique id
-                # avail_job_id can grow up to 9223372036854775807,
-                # so it will no likely to overflow in normal scence.
-                info.avail_job_id += 1
-                await database_sync_to_async(
-                    info.save
-                )()
-            except Exception:
-                traceback.print_exc()
+        if jobid is None:
+            raise UNIQUE_ID_FAILED_TO_UPDATE()
+        job.set_unique_id(jobid)
 
     async def _recovery(self) -> None:
         """
@@ -484,31 +471,34 @@ class JobMaster(Endpoint, Module, Subject, Observer):
 
     def _bind_buildset(self, job: Job, cmd: Dict) -> None:
         bs = BuildSet(cmd)
-
         # Build SingleTask
         sn = job.get_info('sn')
         vsn = job.get_info('vsn')
         extra = job.get_info('extra')
 
+        assert(self._config is not None)
         assert(sn is not None and vsn is not None)
 
         # Get date
-        date_ = str(datetime.now())
+        date_ = datetime.now()
+        # Reformat date string if it provide in config
+        format = self._config.getConfig("DatetimeFormat")
+        date_str = datetime_format(date_, format)
+        if date_str is None:
+            date_str = str(date_)
 
         for build in bs.getBuilds():
 
             # Command Preprocessing
-            build_preprocessing(build, [
-                [MACRO_VER, vsn],
-                [MACRO_DATETIEM, date_],
-            ])
+            macros_trans(build, {
+                MACRO_VER:vsn,
+                MACRO_DATETIEM:date_str,
+            })
 
             if extra is not None:
-                build_preprocessing(build, [[MACRO_EXTRA, extra]])
+                macros_trans(build, { MACRO_EXTRA:extra })
 
-
-            print(build.getCmdStr());
-
+            print(build.getCmd())
 
             st = SingleTask(
                 prepend_prefix(str(job.unique_id), build.getIdent()),
@@ -526,7 +516,7 @@ class JobMaster(Endpoint, Module, Subject, Observer):
                      for build in bs.getBuilds()]
 
         merge_command = bs.getMerge()
-        build_preprocessing(merge_command.getBuild(),[["<version>", vsn]])
+        macros_trans(merge_command.getBuild(), { MACRO_VER:vsn })
 
         pt = PostTask(
             prepend_prefix(str(job.unique_id), job.jobid),
