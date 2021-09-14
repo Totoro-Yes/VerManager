@@ -50,6 +50,7 @@ from client.messages import JobInfoMessage, JobStateChangeMessage, \
 
 from manager.master.msgCell import MsgSource
 from client.messages import Message
+from manager.basic.util import datetime_format
 
 
 JobCommandPrefix = "JOB_COMMAND_"
@@ -475,21 +476,29 @@ class JobMaster(Endpoint, Module, Subject, Observer):
         vsn = job.get_info('vsn')
         extra = job.get_info('extra')
 
+        assert(self._config is not None)
         assert(sn is not None and vsn is not None)
 
         # Get date
-        date_ = str(datetime.now())
+        date_ = datetime.now()
+        # Reformat date string if it provide in config
+        format = self._config.getConfig("DatetimeFormat")
+        date_str = datetime_format(date_, format)
+        if date_str is None:
+            date_str = str(date_)
 
         for build in bs.getBuilds():
 
             # Command Preprocessing
             macros_trans(build, {
                 MACRO_VER:vsn,
-                MACRO_DATETIEM:date_,
+                MACRO_DATETIEM:date_str,
             })
 
             if extra is not None:
                 macros_trans(build, { MACRO_EXTRA:extra })
+
+            print(build.getCmd())
 
             st = SingleTask(
                 prepend_prefix(str(job.unique_id), build.getIdent()),

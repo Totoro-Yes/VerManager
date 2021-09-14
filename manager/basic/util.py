@@ -29,6 +29,7 @@ import socket
 import asyncio
 import psutil
 import chardet
+import datetime
 
 from concurrent.futures import ThreadPoolExecutor
 from threading import Thread
@@ -231,3 +232,32 @@ def decode_confident(bs: bytes) -> str:
         return ""
     else:
         return bs.decode(encode)
+
+
+def datetime_format(time: datetime.datetime, format: str) -> Optional[str]:
+
+    format = format.upper()
+
+    # Make sure format is useable
+    if "YYYY" not in format or \
+       "MM"   not in format or \
+       "DD"   not in format or \
+       "HH"   not in format or \
+       "MM"   not in format or \
+       "SS"   not in format:
+
+        return None
+
+    format = format.replace("YYYY", str(time.year))
+    format = format.replace("MM", zero_expand_str(str(time.month), 2))
+    format = format.replace("DD", zero_expand_str(str(time.day), 2))
+    format = format.replace("HH", zero_expand_str(str(time.hour), 2))
+    format = format.replace("SS", zero_expand_str(str(time.second), 2))
+
+    return format
+
+def zero_expand_str(s: str, n: int) -> str:
+    if len(s) < n:
+        return "0" * (n-len(s)) + s
+
+    return s
