@@ -116,3 +116,5 @@ from manager.worker.TestCases.linkTestCases import \
 
 from manager.worker.TestCases.linkerTestCases import \
     LinkerTestCases
+
+from manager.basic.TestCases.macroTestCases import MacroTestCases
