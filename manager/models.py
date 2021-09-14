@@ -23,7 +23,7 @@
 import asyncio
 from typing import List, Callable, Any, Optional
 
-from django.db import connections
+from django.db import connections, transaction
 from django.db import models
 from django.utils import timezone
 from django.db import connection
@@ -42,8 +42,6 @@ class Informations(models.Model):
     # Next job's unique decimal id
     avail_job_id = models.BigIntegerField()
 
-    lock = asyncio.Lock()
-
     @classmethod
     async def init(cls) -> None:
         infos = cls.objects.all()  # type: ignore
@@ -55,12 +53,10 @@ class Informations(models.Model):
             )()
 
     @classmethod
-    async def jobid_plus(cls) -> Optional[int]:
-        async with cls.lock:
+    def jobid_plus(cls) -> Optional[int]:
+        with transaction.atomic():
             try:
-                info = await database_sync_to_async(
-                    Informations.objects.get  # type: ignore
-                )(idx=0)
+                info = Informations.objects.get(idx=0)
 
                 old_id = info.avail_job_id
 
@@ -68,9 +64,7 @@ class Informations(models.Model):
                 # avail_job_id can grow up to 9223372036854775807,
                 # so it will no likely to overflow in normal scence.
                 info.avail_job_id += 1
-                await database_sync_to_async(
-                    info.save
-                )()
+                info.save()
 
                 return old_id
 

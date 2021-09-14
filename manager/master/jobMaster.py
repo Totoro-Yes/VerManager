@@ -22,6 +22,7 @@
 
 import asyncio
 import manager.master.configs as config
+from manager.basic.macros import macros_trans
 from manager.basic.macros import MACRO_DATETIEM, MACRO_EXTRA, MACRO_VER
 from datetime import datetime
 from functools import reduce
@@ -375,7 +376,10 @@ class JobMaster(Endpoint, Module, Subject, Observer):
         Read the available unique id from DB then
         assign it to Job and update DB.
         """
-        jobid = await Informations.jobid_plus()
+        jobid = await database_sync_to_async(
+            Informations.jobid_plus)()
+
+        print("JOBID is \n")
         if jobid is None:
             raise UNIQUE_ID_FAILED_TO_UPDATE()
         job.set_unique_id(jobid)
@@ -467,7 +471,6 @@ class JobMaster(Endpoint, Module, Subject, Observer):
 
     def _bind_buildset(self, job: Job, cmd: Dict) -> None:
         bs = BuildSet(cmd)
-
         # Build SingleTask
         sn = job.get_info('sn')
         vsn = job.get_info('vsn')
@@ -481,17 +484,13 @@ class JobMaster(Endpoint, Module, Subject, Observer):
         for build in bs.getBuilds():
 
             # Command Preprocessing
-            build_preprocessing(build, [
-                [MACRO_VER, vsn],
-                [MACRO_DATETIEM, date_],
-            ])
+            macros_trans(build, {
+                MACRO_VER:vsn,
+                MACRO_DATETIEM:date_,
+            })
 
             if extra is not None:
-                build_preprocessing(build, [[MACRO_EXTRA, extra]])
-
-
-            print(build.getCmdStr());
-
+                macros_trans(build, { MACRO_EXTRA:extra })
 
             st = SingleTask(
                 prepend_prefix(str(job.unique_id), build.getIdent()),
@@ -509,7 +508,7 @@ class JobMaster(Endpoint, Module, Subject, Observer):
                      for build in bs.getBuilds()]
 
         merge_command = bs.getMerge()
-        build_preprocessing(merge_command.getBuild(),[["<version>", vsn]])
+        macros_trans(merge_command.getBuild(), { MACRO_VER:vsn })
 
         pt = PostTask(
             prepend_prefix(str(job.unique_id), job.jobid),
