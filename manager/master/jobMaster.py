@@ -313,7 +313,6 @@ class JobMaster(Endpoint, Module, Subject, Observer):
         )()
 
     def new_job(self, job: Job) -> None:
-        print("New Job Arrived")
         self._loop.create_task(self.do_job(job))
 
     async def do_job(self, job: Job) -> None:
@@ -489,6 +488,8 @@ class JobMaster(Endpoint, Module, Subject, Observer):
 
         for build in bs.getBuilds():
 
+            print(build.getOutput())
+
             # Command Preprocessing
             macros_trans(build, {
                 MACRO_VER:vsn,
@@ -499,6 +500,7 @@ class JobMaster(Endpoint, Module, Subject, Observer):
                 macros_trans(build, { MACRO_EXTRA:extra })
 
             print(build.getCmd())
+            print(build.getOutput())
 
             st = SingleTask(
                 prepend_prefix(str(job.unique_id), build.getIdent()),
@@ -517,6 +519,10 @@ class JobMaster(Endpoint, Module, Subject, Observer):
 
         merge_command = bs.getMerge()
         macros_trans(merge_command.getBuild(), { MACRO_VER:vsn })
+
+        mbuild = merge_command.getBuild()
+        print(mbuild.getCmd())
+        print(mbuild.getOutput())
 
         pt = PostTask(
             prepend_prefix(str(job.unique_id), job.jobid),
