@@ -1,5 +1,8 @@
 try {
     Invoke-Expression $args[0]
+    if ($? -ne 0) {
+       exit 1
+    }
 } catch {
     exit 1
 }
