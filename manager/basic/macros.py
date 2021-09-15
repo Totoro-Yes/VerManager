@@ -18,6 +18,7 @@ def macros_trans(build: Build, specs: typ.Dict[str, str]) -> None:
     Replace macros within commands of the Build.
     """
     commands = build.getCmd()
+    outputs = build.getOutput()
 
     # Create Macro Parser
     operator = Char(MACRO_OP_EXIST)  # type: ignore
@@ -34,6 +35,9 @@ def macros_trans(build: Build, specs: typ.Dict[str, str]) -> None:
 
     build.setCmd(
         [parser.transformString(cmd) for cmd in commands]  # type: ignore
+    )
+    build.setOutput(
+        [parser.transformString(output) for output in outputs]  # type: ignore
     )
 
 
